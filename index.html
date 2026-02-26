@@ -157,41 +157,64 @@
             z-index: 10;
         }
 
+        /* リサイズハンドル: 44x44px タッチターゲット（WCAG基準） */
         .resize-handle-img {
             position: absolute;
-            right: -6px;
-            bottom: -6px;
-            width: 20px;
-            height: 20px;
-            background: #3b82f6;
-            cursor: se-resize;
+            right: -16px;
+            bottom: -16px;
+            width: 44px;
+            height: 44px;
             display: none;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            align-items: center;
+            justify-content: center;
             touch-action: none;
+            cursor: se-resize;
         }
 
+        .resize-handle-img::after {
+            content: '';
+            display: block;
+            width: 18px;
+            height: 18px;
+            background: #3b82f6;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+        }
+
+        /* 削除ボタン: 44x44px タッチターゲット */
         .delete-btn-img {
             position: absolute;
-            top: -12px;
-            right: -12px;
-            width: 28px;
-            height: 28px;
+            top: -20px;
+            right: -20px;
+            width: 44px;
+            height: 44px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .delete-btn-img::after {
+            content: '✕';
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
             background: #ef4444;
             color: white;
-            display: none;
-            place-items: center;
+            font-size: 13px;
+            font-weight: bold;
             border-radius: 50%;
-            cursor: pointer;
             border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
             transition: transform 0.1s;
         }
 
-        .delete-btn-img:hover,
-        .delete-btn-img:active {
-            transform: scale(1.1);
+        .delete-btn-img:active::after {
+            transform: scale(1.15);
             background: #dc2626;
         }
 
@@ -199,7 +222,7 @@
         .draggable-image-wrapper:hover .delete-btn-img,
         .draggable-image-wrapper.active .resize-handle-img,
         .draggable-image-wrapper.active .delete-btn-img {
-            display: grid;
+            display: flex;
         }
 
         /* キャプチャ時クリーンアップ */
@@ -252,17 +275,7 @@
                 height: 100vh;
             }
 
-            #left-pane {
-                width: 100% !important;
-                height: var(--left-pane-h, 45vh) !important;
-                max-height: none !important;
-                order: 2;
-                border-right: none !important;
-                border-top: none;
-                flex-shrink: 0 !important;
-                transition: height 0.05s;
-            }
-
+            /* 上: プレビュー(order:1) → スプリッター(order:2) → 下: フォーム(order:3) */
             #right-pane {
                 order: 1;
                 flex: none !important;
@@ -273,7 +286,18 @@
 
             #splitter {
                 display: block;
-                order: 1.5;
+                order: 2;
+            }
+
+            #left-pane {
+                order: 3;
+                width: 100% !important;
+                height: var(--left-pane-h, 45vh) !important;
+                max-height: none !important;
+                border-right: none !important;
+                border-top: none;
+                flex-shrink: 0 !important;
+                transition: height 0.05s;
             }
         }
     </style>
@@ -316,7 +340,8 @@
                 <section class="space-y-3">
                     <h3
                         class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2 border-b pb-1">
-                        <i data-lucide="info" class="w-3 h-3"></i> 基本情報</h3>
+                        <i data-lucide="info" class="w-3 h-3"></i> 基本情報
+                    </h3>
                     <div class="input-group"><label class="label-text">タイトル</label><input type="text" data-field="title"
                             class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg font-bold text-slate-800">
                     </div>
@@ -328,7 +353,8 @@
                 <section class="space-y-3">
                     <div class="flex items-center justify-between border-b pb-1">
                         <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                            <i data-lucide="list-todo" class="w-3 h-3"></i> 協議事項・アジェンダ</h3>
+                            <i data-lucide="list-todo" class="w-3 h-3"></i> 協議事項・アジェンダ
+                        </h3>
                     </div>
                     <div id="items-container" class="space-y-3"></div>
                     <button id="btn-add-item"
@@ -565,96 +591,50 @@
             let selectedImageId = null;
 
             function getPointerPos(e) {
-                // タッチイベントとマウスイベントを統一
-                if (e.touches && e.touches.length > 0) {
+                if (e.touches && e.touches.length > 0)
                     return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                }
+                if (e.changedTouches && e.changedTouches.length > 0)
+                    return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
                 return { x: e.clientX, y: e.clientY };
             }
 
             function initImageEvents() {
                 const pc = document.getElementById('preview-container');
 
-                // ★ ポインターダウン（マウス & タッチ共通ハンドラ）
-                function onImgPointerDown(e) {
-                    const deleteBtn = e.target.closest('.delete-btn-img');
-                    if (deleteBtn) {
-                        // 削除ボタンタップ: 即座に削除して選択解除
-                        const id = e.target.closest('.draggable-image-wrapper').dataset.id;
-                        selectedImageId = null;
-                        state.images = state.images.filter(img => img.id !== id);
-                        updatePreview();
-                        e.stopPropagation(); e.preventDefault();
-                        return;
-                    }
-
-                    const resizeHandle = e.target.closest('.resize-handle-img');
-                    const wrapper = e.target.closest('.draggable-image-wrapper');
-                    const pos = getPointerPos(e);
-
-                    if (resizeHandle) {
-                        isImgResizing = true;
-                        currentActiveImg = wrapper;
-                        selectedImageId = wrapper.dataset.id;
-                        imgStartX = pos.x;
-                        imgStartY = pos.y;
-                        imgStartW = parseFloat(wrapper.style.width);
-                        imgStartH = parseFloat(wrapper.style.height);
-                        e.stopPropagation(); e.preventDefault();
-                    } else if (wrapper) {
-                        isImgDragging = true;
-                        currentActiveImg = wrapper;
-                        selectedImageId = wrapper.dataset.id;
-                        imgStartX = pos.x;
-                        imgStartY = pos.y;
-                        imgStartLeft = parseFloat(wrapper.style.left);
-                        imgStartTop = parseFloat(wrapper.style.top);
-                        document.querySelectorAll('.draggable-image-wrapper').forEach(el => el.classList.remove('active'));
-                        wrapper.classList.add('active');
-                        e.stopPropagation(); e.preventDefault();
-                    } else {
-                        // 画像以外をタップ → 選択解除
-                        selectedImageId = null;
-                        document.querySelectorAll('.draggable-image-wrapper').forEach(el => el.classList.remove('active'));
-                    }
-                }
-
-                // ★ ポインタームーブ（スケール補正）
-                function onImgPointerMove(e) {
+                // ウィンドウレベル: ドラッグ中の移動を追御
+                function onGlobalMove(e) {
                     if (!isImgDragging && !isImgResizing || !currentActiveImg) return;
                     const pos = getPointerPos(e);
                     const dx = (pos.x - imgStartX) / currentScale;
                     const dy = (pos.y - imgStartY) / currentScale;
-
                     if (isImgDragging) {
                         currentActiveImg.style.left = `${imgStartLeft + dx}px`;
                         currentActiveImg.style.top = `${imgStartTop + dy}px`;
                     } else if (isImgResizing) {
-                        currentActiveImg.style.width = `${Math.max(30, imgStartW + dx)}px`;
-                        currentActiveImg.style.height = `${Math.max(30, imgStartH + dy)}px`;
+                        currentActiveImg.style.width = `${Math.max(40, imgStartW + dx)}px`;
+                        currentActiveImg.style.height = `${Math.max(40, imgStartH + dy)}px`;
                     }
-                    e.preventDefault();
+                    if (e.cancelable) e.preventDefault();
                 }
 
-                // ★ ポインターアップ（座標確定）
-                function onImgPointerUp(e) {
+                // ウィンドウレベル: 操作確定
+                function onGlobalUp(e) {
                     if (!isImgDragging && !isImgResizing) return;
-
-                    const pos = getPointerPos(e) || { x: imgStartX, y: imgStartY };
+                    const pos = getPointerPos(e);
                     const movedX = Math.abs(pos.x - imgStartX);
                     const movedY = Math.abs(pos.y - imgStartY);
-                    const isTap = movedX < 6 && movedY < 6; // 6px未満の移動はタップとみなす
+                    const isTap = movedX < 8 && movedY < 8;
 
                     if (isTap) {
-                        // タップ: stateは変えずにrenderImagesだけ呼んでactiveクラスを表示
+                        // タップ: state不変、renderImagesのみ呼びactive表示
                         isImgDragging = false;
                         isImgResizing = false;
                         currentActiveImg = null;
-                        renderImages(); // ★ selectedImageId を反映するだけ
+                        renderImages();
                         return;
                     }
 
-                    // ドラッグ/リサイズ: stateを更新してからupdatePreview
+                    // ドラッグ/リサイズ確定: state更新
                     if (currentActiveImg) {
                         const id = currentActiveImg.dataset.id;
                         const imgData = state.images.find(img => img.id === id);
@@ -663,21 +643,11 @@
                             let newTop = parseFloat(currentActiveImg.style.top);
                             imgData.width = parseFloat(currentActiveImg.style.width);
                             imgData.height = parseFloat(currentActiveImg.style.height);
-
-                            let currentPage = imgData.page || 0;
+                            let pg = imgData.page || 0;
                             const ph = currentPageSize.h;
-                            if (newTop > ph) {
-                                const pagesShift = Math.floor(newTop / ph);
-                                currentPage += pagesShift;
-                                newTop -= (ph * pagesShift);
-                            } else if (newTop < 0 && currentPage > 0) {
-                                const pagesShift = Math.ceil(Math.abs(newTop) / ph);
-                                currentPage = Math.max(0, currentPage - pagesShift);
-                                newTop += (ph * pagesShift);
-                            }
-                            imgData.x = newLeft;
-                            imgData.y = newTop;
-                            imgData.page = currentPage;
+                            if (newTop > ph) { const s = Math.floor(newTop / ph); pg += s; newTop -= ph * s; }
+                            else if (newTop < 0 && pg > 0) { const s = Math.ceil(Math.abs(newTop) / ph); pg = Math.max(0, pg - s); newTop += ph * s; }
+                            imgData.x = newLeft; imgData.y = newTop; imgData.page = pg;
                         }
                     }
                     isImgDragging = false;
@@ -686,15 +656,24 @@
                     updatePreview();
                 }
 
-                // マウスイベント
-                pc.addEventListener('mousedown', onImgPointerDown);
-                window.addEventListener('mousemove', onImgPointerMove);
-                window.addEventListener('mouseup', onImgPointerUp);
+                // 画像以外のタップで選択解除
+                pc.addEventListener('touchstart', (e) => {
+                    if (!e.target.closest('.draggable-image-wrapper')) {
+                        selectedImageId = null;
+                        renderImages();
+                    }
+                }, { passive: true });
+                pc.addEventListener('mousedown', (e) => {
+                    if (!e.target.closest('.draggable-image-wrapper')) {
+                        selectedImageId = null;
+                        renderImages();
+                    }
+                });
 
-                // ★ タッチイベント（iPhoneへの対応）
-                pc.addEventListener('touchstart', onImgPointerDown, { passive: false });
-                window.addEventListener('touchmove', onImgPointerMove, { passive: false });
-                window.addEventListener('touchend', onImgPointerUp);
+                window.addEventListener('mousemove', onGlobalMove);
+                window.addEventListener('mouseup', onGlobalUp);
+                window.addEventListener('touchmove', onGlobalMove, { passive: false });
+                window.addEventListener('touchend', onGlobalUp);
             }
 
             function handleImageUpload(e) {
@@ -743,33 +722,74 @@
                     if (!targetPage) return;
                     const imgLayer = targetPage.querySelector('.img-layer');
 
+                    // ★ wrapper
                     const wrapper = document.createElement('div');
-                    // ★ 選択中の画像には即座にactiveクラスを付与（再描画後も維持）
-                    wrapper.className = 'draggable-image-wrapper pointer-events-auto' + (imgData.id === selectedImageId ? ' active' : '');
+                    wrapper.className = 'draggable-image-wrapper pointer-events-auto' +
+                        (imgData.id === selectedImageId ? ' active' : '');
                     wrapper.dataset.id = imgData.id;
-                    wrapper.style.left = `${imgData.x}px`;
-                    wrapper.style.top = `${imgData.y}px`;
-                    wrapper.style.width = `${imgData.width}px`;
-                    wrapper.style.height = `${imgData.height}px`;
+                    wrapper.style.cssText =
+                        `left:${imgData.x}px;top:${imgData.y}px;` +
+                        `width:${imgData.width}px;height:${imgData.height}px;touch-action:none;`;
 
+                    // 画像本体
                     const img = document.createElement('img');
                     img.src = imgData.base64;
-                    img.className = 'w-full h-full object-contain pointer-events-none';
+                    img.style.cssText = 'width:100%;height:100%;object-fit:contain;' +
+                        'pointer-events:none;user-select:none;-webkit-user-drag:none;display:block;';
 
-                    const resizeHandle = document.createElement('div');
-                    resizeHandle.className = 'resize-handle-img';
-
+                    // ★ 削除ボタン — 直接イベント登録（iPhoneでのイベントデリゲート不具合回避）
                     const deleteBtn = document.createElement('div');
                     deleteBtn.className = 'delete-btn-img';
-                    deleteBtn.innerHTML = '<i data-lucide="x" class="w-3 h-3"></i>';
+                    function doDelete(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        isImgDragging = false; isImgResizing = false; currentActiveImg = null;
+                        selectedImageId = null;
+                        state.images = state.images.filter(img => img.id !== imgData.id);
+                        updatePreview();
+                    }
+                    deleteBtn.addEventListener('touchstart', doDelete, { passive: false });
+                    deleteBtn.addEventListener('mousedown', doDelete);
+
+                    // ★ リサイズハンドル — 直接イベント登録
+                    const resizeHandle = document.createElement('div');
+                    resizeHandle.className = 'resize-handle-img';
+                    function onResizeStart(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        isImgResizing = true; isImgDragging = false;
+                        currentActiveImg = wrapper;
+                        selectedImageId = imgData.id;
+                        const pos = getPointerPos(e);
+                        imgStartX = pos.x; imgStartY = pos.y;
+                        imgStartW = parseFloat(wrapper.style.width);
+                        imgStartH = parseFloat(wrapper.style.height);
+                    }
+                    resizeHandle.addEventListener('touchstart', onResizeStart, { passive: false });
+                    resizeHandle.addEventListener('mousedown', onResizeStart);
+
+                    // ★ ラッパードラッグ — 直接イベント登録
+                    function onWrapperStart(e) {
+                        if (e.target.closest('.delete-btn-img') || e.target.closest('.resize-handle-img')) return;
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        isImgDragging = true; isImgResizing = false;
+                        currentActiveImg = wrapper;
+                        selectedImageId = imgData.id;
+                        const pos = getPointerPos(e);
+                        imgStartX = pos.x; imgStartY = pos.y;
+                        imgStartLeft = parseFloat(wrapper.style.left);
+                        imgStartTop = parseFloat(wrapper.style.top);
+                    }
+                    wrapper.addEventListener('touchstart', onWrapperStart, { passive: false });
+                    wrapper.addEventListener('mousedown', onWrapperStart);
 
                     wrapper.appendChild(img);
                     wrapper.appendChild(resizeHandle);
                     wrapper.appendChild(deleteBtn);
                     imgLayer.appendChild(wrapper);
                 });
-
-                if (typeof lucide !== 'undefined') lucide.createIcons();
+                // lucide不要（ボタンはCSSデコレーターで表示）
             }
 
             function renderItemsForm() {
