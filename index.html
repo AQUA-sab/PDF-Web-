@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <!-- iPhoneでのズーム防止: maximum-scale=1, user-scalable=no -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>会議アジェンダ</title>
+
+    <link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@400;700;900&display=swap">
+
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <script src="https://unpkg.com/lucide@0.344.0" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root { --page-w: 794px; --page-h: 1123px; }
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; overflow: hidden; background-color: #f1f5f9; margin: 0; }
+        .serif { font-family: 'Noto Serif JP', serif; }
+        .pdf-page { width: var(--page-w); height: var(--page-h); box-sizing: border-box; background-color: white; position: relative; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); flex-shrink: 0; transform-origin: top left; overflow: hidden; color: #1e293b; }
+        .preview-wrapper { display: grid; place-items: start center; padding: 20px 0; gap: 20px; width: 100%; min-height: 100%; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        /* ★ iPhone入力ズーム防止: 全inputに font-size: 16px 以上を強制 */
+        input, textarea, select {
+            font-size: 16px !important;
+        }
+        input:focus, textarea:focus { outline: none; border-color: #2563eb; background-color: #fff; }
+        .input-group { display: flex; flex-direction: column; gap: 0.25rem; }
+        .label-text { font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; padding-left: 0.25rem; }
+
+        /* フローティングズーム */
+        .floating-zoom { position: absolute; z-index: 40; bottom: 16px; left: 16px; opacity: 0.4; transition: opacity 0.2s ease; }
+        .floating-zoom:hover { opacity: 1; }
+        .floating-zoom:active { opacity: 1; }
+
+        /* PDF生成オーバーレイ */
+        .pdf-overlay { position: absolute; inset: 0; z-index: 50; display: none; place-items: center; background: rgba(100, 116, 139, 0.75); backdrop-filter: blur(6px); }
+        .pdf-overlay.active { display: grid; }
+        .pdf-spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 画像操作用 UI */
+        .draggable-image-wrapper { position: absolute; cursor: move; border: 2px dashed transparent; user-select: none; border-radius: 4px; transition: border-color 0.15s; }
+        .draggable-image-wrapper:hover, .draggable-image-wrapper.active { border-color: #3b82f6; z-index: 10; }
+        .resize-handle-img { position: absolute; right: -6px; bottom: -6px; width: 20px; height: 20px; background: #3b82f6; cursor: se-resize; display: none; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); touch-action: none; }
+        .delete-btn-img { position: absolute; top: -12px; right: -12px; width: 28px; height: 28px; background: #ef4444; color: white; display: none; place-items: center; border-radius: 50%; cursor: pointer; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.1s; }
+        .delete-btn-img:hover, .delete-btn-img:active { transform: scale(1.1); background: #dc2626; }
+        .draggable-image-wrapper:hover .resize-handle-img, .draggable-image-wrapper:hover .delete-btn-img,
+        .draggable-image-wrapper.active .resize-handle-img, .draggable-image-wrapper.active .delete-btn-img { display: grid; }
+
+        /* キャプチャ時クリーンアップ */
+        .is-capturing .draggable-image-wrapper { border-color: transparent !important; }
+        .is-capturing .resize-handle-img, .is-capturing .delete-btn-img { display: none !important; }
+
+        /* ====== スプリッターバー (iPhone向け縦分割) ====== */
+        #splitter {
+            display: none; /* デスクトップでは非表示 */
+            width: 100%;
+            height: 14px;
+            background: linear-gradient(to bottom, #cbd5e1 0%, #e2e8f0 50%, #cbd5e1 100%);
+            cursor: ns-resize;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 30;
+            touch-action: none;
+            border-top: 1px solid #94a3b8;
+            border-bottom: 1px solid #94a3b8;
+        }
+        #splitter::before {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 4px;
+            background: #94a3b8;
+            border-radius: 2px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* レスポンシブ: 768px 以下で縦並び + スプリッター表示 */
+        @media (max-width: 767px) {
+            body { overflow: hidden; }
+            #main-app-shell { flex-direction: column !important; height: 100vh; }
+            #left-pane {
+                width: 100% !important;
+                height: var(--left-pane-h, 45vh) !important;
+                max-height: none !important;
+                order: 2;
+                border-right: none !important;
+                border-top: none;
+                flex-shrink: 0 !important;
+                transition: height 0.05s;
+            }
+            #right-pane {
+                order: 1;
+                flex: none !important;
+                height: var(--right-pane-h, 45vh) !important;
+                min-height: 80px;
+                transition: height 0.05s;
+            }
+            #splitter {
+                display: block;
+                order: 1.5;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- 通知エリア -->
+    <div id="notification" class="fixed top-6 left-1/2 -translate-x-1/2 z-[2000] flex items-center gap-3 px-6 py-3 rounded-2xl shadow-2xl bg-slate-900 text-white hidden text-sm font-bold tracking-tight">
+        <i id="notification-icon" data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
+        <span id="notification-message">メッセージ</span>
+    </div>
+
+    <!-- メインアプリ -->
+    <div id="main-app-shell" class="flex flex-row flex-1 overflow-hidden">
+
+        <!-- 左ペイン: 入力フォーム -->
+        <aside id="left-pane" class="w-[380px] h-full bg-white overflow-y-auto p-5 flex-none border-r shadow-2xl z-20 scrollbar-hide text-slate-700">
+            <!-- 操作ボタン群 -->
+            <div class="flex items-center gap-2 mb-5">
+                <input type="file" id="fileInput" accept=".pdf" class="hidden">
+                <button id="btn-open-newtab" class="p-1.5 text-slate-300 hover:text-blue-500 transition-all shrink-0" title="別タブで開く">
+                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                </button>
+                <button id="btn-upload-trigger" class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">PDF読込</button>
+                <button id="btn-copy-code" class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">コードコピー</button>
+                <button id="btn-download" class="bg-slate-900 text-white px-3 py-2 rounded-lg font-bold text-xs hover:bg-blue-700 shadow-lg transition-all active:scale-95 whitespace-nowrap ml-auto">
+                    <span id="downloadBtnText">PDF保存</span>
+                </button>
+            </div>
+
+            <div id="form-container" class="space-y-6">
+                <!-- 基本情報 -->
+                <section class="space-y-3">
+                    <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2 border-b pb-1"><i data-lucide="info" class="w-3 h-3"></i> 基本情報</h3>
+                    <div class="input-group"><label class="label-text">タイトル</label><input type="text" data-field="title" class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg font-bold text-slate-800"></div>
+                    <div class="input-group"><label class="label-text">日付</label><input type="text" data-field="date" class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg"></div>
+                </section>
+
+                <!-- アジェンダ項目 -->
+                <section class="space-y-3">
+                    <div class="flex items-center justify-between border-b pb-1">
+                        <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2"><i data-lucide="list-todo" class="w-3 h-3"></i> 協議事項・アジェンダ</h3>
+                    </div>
+                    <div id="items-container" class="space-y-3"></div>
+                    <button id="btn-add-item" class="text-xs text-blue-600 font-bold hover:text-blue-800 flex items-center gap-1 py-1"><i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> 項目を追加</button>
+                </section>
+
+                <!-- 拡張機能 -->
+                <section class="space-y-4 pt-2 border-t border-slate-100">
+                    <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2"><i data-lucide="layers" class="w-3 h-3"></i> 拡張ツール</h3>
+
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-slate-600">画像を配置（自由に移動・リサイズ可）</span>
+                        </div>
+                        <input type="file" id="imageInput" accept="image/*" multiple class="hidden">
+                        <button id="btn-add-image" class="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-md font-bold text-xs hover:bg-slate-100 transition-all flex items-center justify-center gap-2 shadow-sm">
+                            <i data-lucide="image-plus" class="w-4 h-4"></i> 画像をアップロード
+                        </button>
+                    </div>
+
+                    <label class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                        <input type="checkbox" id="chk-memo-page" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                        <div class="flex flex-col">
+                            <span class="text-xs font-bold text-slate-700">汎用メモ用紙（罫線）を追加する</span>
+                            <span class="text-[10px] text-slate-400">書類の最後に書き込み専用ページを作成</span>
+                        </div>
+                    </label>
+                </section>
+            </div>
+        </aside>
+
+        <!-- ★ スプリッターバー (iPhoneで縦方向ドラッグで分割位置を変更) -->
+        <div id="splitter"></div>
+
+        <!-- 右ペイン: プレビュー -->
+        <div id="right-pane" class="flex-1 flex flex-col overflow-hidden bg-slate-200 relative">
+            <main id="preview-container" class="flex-1 overflow-auto bg-slate-200 relative">
+                <!-- PDF生成オーバーレイ -->
+                <div id="pdf-overlay" class="pdf-overlay">
+                    <div class="flex flex-col items-center gap-4">
+                        <div class="pdf-spinner"></div>
+                        <p class="text-white font-bold text-sm tracking-wide">PDF生成中...</p>
+                    </div>
+                </div>
+
+                <div class="preview-wrapper">
+                    <div class="capture-area-container">
+                        <!-- ページ1 -->
+                        <div class="pdf-page relative" data-page="0">
+                            <div class="img-layer absolute inset-0 z-40 pointer-events-none"></div>
+                            <div class="page-inner flex flex-col h-full p-[50px]">
+                                <div class="mb-6">
+                                    <div class="flex justify-end mb-4 text-sm text-slate-600">
+                                        <span data-view="date" class="whitespace-nowrap">2026年2月26日</span>
+                                    </div>
+                                    <h1 class="text-center text-2xl font-black tracking-widest text-slate-800 border-b-2 border-slate-800 pb-3 mb-2" data-view="title">月例開発チームミーティング アジェンダ</h1>
+                                </div>
+                                <div data-flow-area class="flex-grow flex flex-col gap-6 pt-2 density-gap"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- ズームコントロール -->
+            <div class="floating-zoom">
+                <div class="flex items-center bg-white/90 backdrop-blur-md rounded-xl p-1 gap-0.5 border shadow-lg">
+                    <button id="btn-zoom-out" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="minus" class="w-4 h-4"></i></button>
+                    <button id="btn-zoom-fit" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="maximize" class="w-4 h-4"></i></button>
+                    <button id="btn-zoom-in" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                    <div id="zoom-level-text" class="px-2 text-[11px] font-black text-slate-500 min-w-[45px] text-center uppercase tracking-tighter">67%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script id="main-script">
+        (function () {
+            "use strict";
+            const APP_ID = "meeting-agenda-v1";
+            const RECOVERY_KEY = "__SCRES_RECOVERY_PAYLOAD__";
+
+            function safeBase64Encode(str) { return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1))); }
+            function safeBase64Decode(str) { return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); }
+
+            let state = {
+                title: "月例開発チームミーティング アジェンダ",
+                date: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }),
+                includeMemoPage: true,
+                items: [
+                    { heading: "前回の振り返り", content: "・新機能リリースの反響\n・発生した不具合の対応状況", memoLines: 3 },
+                    { heading: "今月の目標共有", content: "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", memoLines: 4 },
+                    { heading: "各担当からの進捗報告", content: "", memoLines: 6 }
+                ],
+                images: []
+            };
+
+            /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = {"title":"月例開発チームミーティング アジェンダ","date":"2026年2月26日","includeMemoPage":true,"items":[{"heading":"前回の振り返り","content":"・新機能リリースの反響\n・発生した不具合の対応状況","memoLines":3},{"heading":"今月の目標共有","content":"・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）","memoLines":4},{"heading":"各担当からの進捗報告","content":"","memoLines":6}],"images":[]}; /* __INJECTED_DATA_END__ */
+
+            const PAGE_SIZES = {
+                A4: { w: 794, h: 1123, label: 'A4', pdf: 'a4', orient: 'p', mmW: 210, mmH: 297 }
+            };
+            let currentPageSize = PAGE_SIZES.A4;
+            let currentScale = 1.0;
+
+            function init() {
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                const pending = sessionStorage.getItem(RECOVERY_KEY);
+                if (pending) {
+                    try { const p = JSON.parse(pending); if (p.data) state = { ...state, ...p.data }; sessionStorage.removeItem(RECOVERY_KEY); } catch (e) { }
+                } else if (typeof __EMBEDDED_DATA__ !== 'undefined') {
+                    state = { ...state, ...__EMBEDDED_DATA__ };
+                }
+
+                attachEventListeners();
+                initImageEvents();
+                initSplitter();      // ★ スプリッターの初期化
+                syncFormInputs();
+                renderItemsForm();
+                updatePreview();
+                setTimeout(fitToScreen, 200);
+            }
+
+            function attachEventListeners() {
+                document.querySelectorAll('.field-input').forEach(input => {
+                    input.addEventListener('input', (e) => {
+                        const f = e.target.dataset.field;
+                        if (f) { state[f] = e.target.value; updatePreview(); }
+                        if (e.target.tagName === 'TEXTAREA') { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }
+                    });
+                });
+
+                document.getElementById('btn-upload-trigger').addEventListener('click', () => document.getElementById('fileInput').click());
+                document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+                document.getElementById('btn-download').addEventListener('click', handleDownloadPDF);
+                document.getElementById('btn-copy-code').addEventListener('click', handleCopyCode);
+                document.getElementById('btn-open-newtab').addEventListener('click', handleOpenNewTab);
+
+                document.getElementById('btn-zoom-in').addEventListener('click', () => adjustZoom(Math.min(currentScale + 0.1, 2)));
+                document.getElementById('btn-zoom-out').addEventListener('click', () => adjustZoom(Math.max(currentScale - 0.1, 0.3)));
+                document.getElementById('btn-zoom-fit').addEventListener('click', fitToScreen);
+                window.addEventListener('resize', fitToScreen);
+
+                document.getElementById('btn-add-item').addEventListener('click', () => {
+                    state.items.push({ heading: "", content: "", memoLines: 3 });
+                    renderItemsForm(); updatePreview();
+                });
+
+                const chkMemo = document.getElementById('chk-memo-page');
+                chkMemo.checked = state.includeMemoPage;
+                chkMemo.addEventListener('change', (e) => {
+                    state.includeMemoPage = e.target.checked;
+                    updatePreview();
+                });
+
+                document.getElementById('btn-add-image').addEventListener('click', () => document.getElementById('imageInput').click());
+                document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+            }
+
+            // ====== ★ スプリッターバーの初期化（iPhone用縦分割ドラッグ） ======
+            function initSplitter() {
+                const splitter = document.getElementById('splitter');
+                const leftPane = document.getElementById('left-pane');
+                const rightPane = document.getElementById('right-pane');
+                const shell = document.getElementById('main-app-shell');
+
+                let isDragging = false;
+                let startY = 0;
+                let startLeftH = 0;
+                let startRightH = 0;
+
+                function onSplitterStart(e) {
+                    // スマホ判定
+                    if (window.innerWidth > 767) return;
+                    isDragging = true;
+                    startY = e.touches ? e.touches[0].clientY : e.clientY;
+                    startLeftH = leftPane.offsetHeight;
+                    startRightH = rightPane.offsetHeight;
+                    e.preventDefault();
+                }
+
+                function onSplitterMove(e) {
+                    if (!isDragging) return;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    const dy = clientY - startY;
+                    const shellH = shell.offsetHeight - splitter.offsetHeight;
+                    const newLeftH = Math.max(80, Math.min(startLeftH - dy, shellH - 80));
+                    const newRightH = shellH - newLeftH;
+                    leftPane.style.setProperty('--left-pane-h', newLeftH + 'px');
+                    rightPane.style.setProperty('--right-pane-h', newRightH + 'px');
+                    // CSS変数をシェル上で適用
+                    leftPane.style.height = newLeftH + 'px';
+                    rightPane.style.height = newRightH + 'px';
+                    e.preventDefault();
+                }
+
+                function onSplitterEnd() {
+                    if (isDragging) {
+                        isDragging = false;
+                        fitToScreen();
+                    }
+                }
+
+                // タッチイベント
+                splitter.addEventListener('touchstart', onSplitterStart, { passive: false });
+                window.addEventListener('touchmove', onSplitterMove, { passive: false });
+                window.addEventListener('touchend', onSplitterEnd);
+                // マウスイベント（デスクトップでもモバイルエミュレータ用）
+                splitter.addEventListener('mousedown', onSplitterStart);
+                window.addEventListener('mousemove', onSplitterMove);
+                window.addEventListener('mouseup', onSplitterEnd);
+            }
+
+            // ====== 画像のドラッグ＆リサイズ制御（マウス + タッチ対応） ======
+            let isImgDragging = false;
+            let isImgResizing = false;
+            let currentActiveImg = null;
+            let imgStartX, imgStartY, imgStartLeft, imgStartTop, imgStartW, imgStartH;
+
+            function getPointerPos(e) {
+                // タッチイベントとマウスイベントを統一
+                if (e.touches && e.touches.length > 0) {
+                    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+                return { x: e.clientX, y: e.clientY };
+            }
+
+            function initImageEvents() {
+                const pc = document.getElementById('preview-container');
+
+                // ★ ポインターダウン（マウス & タッチ共通ハンドラ）
+                function onImgPointerDown(e) {
+                    const deleteBtn = e.target.closest('.delete-btn-img');
+                    if (deleteBtn) {
+                        const id = e.target.closest('.draggable-image-wrapper').dataset.id;
+                        state.images = state.images.filter(img => img.id !== id);
+                        updatePreview();
+                        return;
+                    }
+
+                    const resizeHandle = e.target.closest('.resize-handle-img');
+                    const wrapper = e.target.closest('.draggable-image-wrapper');
+                    const pos = getPointerPos(e);
+
+                    if (resizeHandle) {
+                        isImgResizing = true;
+                        currentActiveImg = wrapper;
+                        imgStartX = pos.x;
+                        imgStartY = pos.y;
+                        imgStartW = parseFloat(wrapper.style.width);
+                        imgStartH = parseFloat(wrapper.style.height);
+                        e.stopPropagation(); e.preventDefault();
+                    } else if (wrapper) {
+                        isImgDragging = true;
+                        currentActiveImg = wrapper;
+                        imgStartX = pos.x;
+                        imgStartY = pos.y;
+                        imgStartLeft = parseFloat(wrapper.style.left);
+                        imgStartTop = parseFloat(wrapper.style.top);
+                        document.querySelectorAll('.draggable-image-wrapper').forEach(el => el.classList.remove('active'));
+                        wrapper.classList.add('active');
+                        e.stopPropagation(); e.preventDefault();
+                    }
+                }
+
+                // ★ ポインタームーブ（スケール補正）
+                function onImgPointerMove(e) {
+                    if (!isImgDragging && !isImgResizing || !currentActiveImg) return;
+                    const pos = getPointerPos(e);
+                    const dx = (pos.x - imgStartX) / currentScale;
+                    const dy = (pos.y - imgStartY) / currentScale;
+
+                    if (isImgDragging) {
+                        currentActiveImg.style.left = `${imgStartLeft + dx}px`;
+                        currentActiveImg.style.top = `${imgStartTop + dy}px`;
+                    } else if (isImgResizing) {
+                        currentActiveImg.style.width = `${Math.max(30, imgStartW + dx)}px`;
+                        currentActiveImg.style.height = `${Math.max(30, imgStartH + dy)}px`;
+                    }
+                    e.preventDefault();
+                }
+
+                // ★ ポインターアップ（座標確定）
+                function onImgPointerUp() {
+                    if (isImgDragging || isImgResizing) {
+                        if (currentActiveImg) {
+                            const id = currentActiveImg.dataset.id;
+                            const imgData = state.images.find(img => img.id === id);
+                            if (imgData) {
+                                let newLeft = parseFloat(currentActiveImg.style.left);
+                                let newTop = parseFloat(currentActiveImg.style.top);
+                                imgData.width = parseFloat(currentActiveImg.style.width);
+                                imgData.height = parseFloat(currentActiveImg.style.height);
+
+                                let currentPage = imgData.page || 0;
+                                const ph = currentPageSize.h;
+                                if (newTop > ph) {
+                                    const pagesShift = Math.floor(newTop / ph);
+                                    currentPage += pagesShift;
+                                    newTop -= (ph * pagesShift);
+                                } else if (newTop < 0 && currentPage > 0) {
+                                    const pagesShift = Math.ceil(Math.abs(newTop) / ph);
+                                    currentPage = Math.max(0, currentPage - pagesShift);
+                                    newTop += (ph * pagesShift);
+                                }
+                                imgData.x = newLeft;
+                                imgData.y = newTop;
+                                imgData.page = currentPage;
+                            }
+                        }
+                        isImgDragging = false;
+                        isImgResizing = false;
+                        currentActiveImg = null;
+                        updatePreview();
+                    }
+                }
+
+                // マウスイベント
+                pc.addEventListener('mousedown', onImgPointerDown);
+                window.addEventListener('mousemove', onImgPointerMove);
+                window.addEventListener('mouseup', onImgPointerUp);
+
+                // ★ タッチイベント（iPhoneへの対応）
+                pc.addEventListener('touchstart', onImgPointerDown, { passive: false });
+                window.addEventListener('touchmove', onImgPointerMove, { passive: false });
+                window.addEventListener('touchend', onImgPointerUp);
+            }
+
+            function handleImageUpload(e) {
+                const files = e.target.files;
+                if (!files.length) return;
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function (evt) {
+                        const base64 = evt.target.result;
+                        const tempImg = new Image();
+                        tempImg.onload = function () {
+                            const ratio = tempImg.width / tempImg.height;
+                            const initW = 250;
+                            const initH = 250 / ratio;
+                            state.images.push({
+                                id: 'img_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                                base64: base64,
+                                x: 100, y: 150,
+                                width: initW, height: initH,
+                                page: 0
+                            });
+                            updatePreview();
+                        };
+                        tempImg.src = base64;
+                    };
+                    reader.readAsDataURL(file);
+                });
+                e.target.value = '';
+            }
+
+            function renderImages() {
+                const totalPages = document.querySelectorAll('.pdf-page').length;
+                document.querySelectorAll('.pdf-page').forEach(page => {
+                    let imgLayer = page.querySelector('.img-layer');
+                    if (!imgLayer) {
+                        imgLayer = document.createElement('div');
+                        imgLayer.className = 'img-layer absolute inset-0 z-40 pointer-events-none';
+                        page.appendChild(imgLayer);
+                    }
+                    imgLayer.innerHTML = '';
+                });
+
+                state.images.forEach(imgData => {
+                    const pageIndex = Math.min(imgData.page || 0, totalPages - 1);
+                    const targetPage = document.querySelector(`.pdf-page[data-page="${pageIndex}"]`);
+                    if (!targetPage) return;
+                    const imgLayer = targetPage.querySelector('.img-layer');
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'draggable-image-wrapper pointer-events-auto';
+                    wrapper.dataset.id = imgData.id;
+                    wrapper.style.left = `${imgData.x}px`;
+                    wrapper.style.top = `${imgData.y}px`;
+                    wrapper.style.width = `${imgData.width}px`;
+                    wrapper.style.height = `${imgData.height}px`;
+
+                    const img = document.createElement('img');
+                    img.src = imgData.base64;
+                    img.className = 'w-full h-full object-contain pointer-events-none';
+
+                    const resizeHandle = document.createElement('div');
+                    resizeHandle.className = 'resize-handle-img';
+
+                    const deleteBtn = document.createElement('div');
+                    deleteBtn.className = 'delete-btn-img';
+                    deleteBtn.innerHTML = '<i data-lucide="x" class="w-3 h-3"></i>';
+
+                    wrapper.appendChild(img);
+                    wrapper.appendChild(resizeHandle);
+                    wrapper.appendChild(deleteBtn);
+                    imgLayer.appendChild(wrapper);
+                });
+
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+
+            function renderItemsForm() {
+                const c = document.getElementById('items-container');
+                c.innerHTML = '';
+                state.items.forEach((item, i) => {
+                    const row = document.createElement('div');
+                    row.className = 'bg-slate-50 border border-slate-100 p-3 rounded-lg flex flex-col gap-2 relative group';
+                    row.innerHTML = `
+                        <button class="btn-del-item absolute top-2 right-2 text-slate-300 hover:text-red-500 hidden group-hover:block" data-idx="${i}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        <input type="text" placeholder="見出し (例: 進捗報告)" value="${item.heading}" class="item-field w-full p-2 bg-white border border-slate-200 rounded font-bold" data-idx="${i}" data-key="heading">
+                        <textarea placeholder="内容（任意）" class="item-field w-full p-2 bg-white border border-slate-200 rounded leading-relaxed resize-none h-16" data-idx="${i}" data-key="content">${item.content}</textarea>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-[10px] text-slate-500 font-bold">協議メモ欄の行数:</span>
+                            <input type="number" min="0" max="20" value="${item.memoLines}" class="item-field w-16 p-1 text-center border border-slate-200 rounded" data-idx="${i}" data-key="memoLines">
+                        </div>`;
+                    c.appendChild(row);
+                });
+
+                c.querySelectorAll('.item-field').forEach(el => {
+                    el.addEventListener('input', e => {
+                        let val = e.target.value;
+                        if (e.target.dataset.key === 'memoLines') val = parseInt(val) || 0;
+                        state.items[+e.target.dataset.idx][e.target.dataset.key] = val;
+                        updatePreview();
+                    });
+                });
+                c.querySelectorAll('.btn-del-item').forEach(el => {
+                    el.addEventListener('click', e => { state.items.splice(+e.currentTarget.dataset.idx, 1); renderItemsForm(); updatePreview(); });
+                });
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+
+            function syncFormInputs() {
+                Object.keys(state).forEach(k => {
+                    if (k === 'items' || k === 'images') return;
+                    const el = document.querySelector(`[data-field="${k}"]`);
+                    if (el) el.value = state[k];
+                });
+                document.querySelectorAll('textarea.field-input').forEach(ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
+                document.getElementById('chk-memo-page').checked = state.includeMemoPage;
+            }
+
+            function updatePreviewField(field) { document.querySelectorAll(`[data-view="${field}"]`).forEach(el => el.innerText = state[field]); }
+
+            function updatePreview() {
+                Object.keys(state).forEach(k => { if (k !== 'items' && k !== 'images') updatePreviewField(k); });
+
+                const flowArea = document.querySelector('[data-flow-area]');
+                if (flowArea) {
+                    flowArea.innerHTML = '';
+                    state.items.forEach((item, i) => {
+                        const block = document.createElement('div');
+                        block.className = 'flow-block';
+                        const memoHtml = item.memoLines > 0 ? `
+                            <div class="mt-4 flex flex-col gap-0 border-t border-slate-300">
+                                ${Array(item.memoLines).fill('<div class="h-8 border-b border-slate-300 border-dashed"></div>').join('')}
+                            </div>` : '';
+                        block.innerHTML = `
+                            <div class="density-pad">
+                                <h2 class="text-base font-bold text-slate-800 border-l-[3px] border-slate-800 pl-3 mb-3 flex items-center gap-2">
+                                    <span class="bg-slate-800 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0">${i + 1}</span>
+                                    ${item.heading || '未入力'}
+                                </h2>
+                                ${item.content ? `<div class="text-sm text-slate-600 leading-[1.8] whitespace-pre-wrap pl-5">${item.content}</div>` : ''}
+                                ${memoHtml}
+                            </div>`;
+                        flowArea.appendChild(block);
+                    });
+
+                    if (state.includeMemoPage) {
+                        const memoBlock = document.createElement('div');
+                        memoBlock.className = 'flow-block';
+                        memoBlock.innerHTML = `
+                            <div class="pt-8">
+                                <h2 class="text-lg font-bold mb-4 text-slate-800 border-l-4 border-slate-300 pl-3 uppercase tracking-widest text-slate-400">Memo</h2>
+                                <div class="flex flex-col gap-0 border-t border-slate-400">
+                                    ${Array(24).fill('<div class="h-[40px] border-b border-slate-300"></div>').join('')}
+                                </div>
+                            </div>`;
+                        flowArea.appendChild(memoBlock);
+                    }
+                }
+
+                autoPaginate();
+                renderImages();
+                autoAdjustDensity();
+            }
+
+            function autoPaginate() {
+                const wrapper = document.querySelector('.preview-wrapper');
+                if (!wrapper) return;
+                document.querySelectorAll('.pdf-page[data-dynamic]').forEach(p => p.closest('.capture-area-container')?.remove());
+
+                const firstFlowArea = document.querySelector('[data-flow-area]');
+                if (!firstFlowArea) return;
+
+                const blocks = Array.from(firstFlowArea.querySelectorAll('.flow-block'));
+                if (!blocks.length) return;
+
+                blocks.forEach(b => b.remove());
+
+                const pageH = currentPageSize.h;
+                const PADDING_V = 100, FOOTER_H = 40, SAFETY = 15;
+                let headerH = 0;
+                let _el = firstFlowArea.previousElementSibling;
+                while (_el) { headerH += _el.offsetHeight + parseFloat(getComputedStyle(_el).marginBottom || 0); _el = _el.previousElementSibling; }
+                const LIMIT_FIRST = pageH - PADDING_V - FOOTER_H - SAFETY - headerH;
+                const LIMIT_NORMAL = pageH - PADDING_V - FOOTER_H - SAFETY;
+
+                let currentFlowArea = firstFlowArea;
+                let currentH = 0, limit = LIMIT_FIRST, pageCount = 1;
+
+                blocks.forEach(block => {
+                    currentFlowArea.appendChild(block);
+                    const blockH = block.offsetHeight + 24;
+
+                    if (currentH + blockH > limit && currentH > 0) {
+                        block.remove();
+                        pageCount++;
+                        const newContainer = document.createElement('div'); newContainer.className = 'capture-area-container'; newContainer.style.position = 'relative';
+                        const newPage = document.createElement('div'); newPage.className = 'pdf-page relative'; newPage.setAttribute('data-page', String(pageCount - 1)); newPage.setAttribute('data-dynamic', 'true');
+                        const imgLayer = document.createElement('div'); imgLayer.className = 'img-layer absolute inset-0 z-40 pointer-events-none';
+                        newPage.appendChild(imgLayer);
+                        const newInner = document.createElement('div'); newInner.className = 'page-inner flex flex-col h-full p-[50px]';
+                        const newFlowArea = document.createElement('div'); newFlowArea.className = 'flex-grow flex flex-col gap-6 pt-4 density-gap'; newFlowArea.style.justifyContent = 'flex-start'; newFlowArea.setAttribute('data-flow-area', '');
+                        newInner.appendChild(newFlowArea);
+                        newPage.appendChild(newInner);
+                        newContainer.appendChild(newPage);
+                        wrapper.appendChild(newContainer);
+
+                        currentFlowArea = newFlowArea;
+                        currentFlowArea.appendChild(block);
+                        currentH = block.offsetHeight + 24;
+                        limit = LIMIT_NORMAL;
+                    } else {
+                        currentH += blockH;
+                    }
+                });
+
+                const allFlowAreas = document.querySelectorAll('[data-flow-area]');
+                if (allFlowAreas.length >= 2) {
+                    const lastArea = allFlowAreas[allFlowAreas.length - 1];
+                    const prevArea = allFlowAreas[allFlowAreas.length - 2];
+                    const prevPage = prevArea.closest('.pdf-page');
+                    const prevInner = prevPage.querySelector('.page-inner');
+                    prevInner.style.height = 'auto';
+                    const remainingH = (prevPage.clientHeight - 160) - prevInner.scrollHeight;
+                    prevInner.style.height = '';
+                    lastArea.style.height = 'auto';
+                    const lastH = lastArea.scrollHeight;
+                    lastArea.style.height = '';
+                    if (lastH <= remainingH) {
+                        Array.from(lastArea.querySelectorAll('.flow-block')).forEach(b => prevArea.appendChild(b));
+                        lastArea.closest('.pdf-page').closest('.capture-area-container')?.remove();
+                        pageCount--;
+                    }
+                }
+                updateZoomUI();
+            }
+
+            function autoAdjustDensity() {
+                document.querySelectorAll('.pdf-page').forEach(page => {
+                    const inner = page.querySelector('.page-inner');
+                    if (!inner) return;
+                    const safeH = page.clientHeight - 60;
+                    inner.style.height = 'auto'; inner.style.transform = ''; inner.style.width = ''; inner.style.marginLeft = '';
+                    inner.style.fontSize = ''; inner.style.lineHeight = '';
+                    inner.querySelectorAll('.density-gap').forEach(el => el.style.gap = '');
+                    inner.querySelectorAll('.density-pad').forEach(el => el.style.padding = '');
+                    inner.querySelectorAll(':scope > *').forEach(el => el.style.marginBottom = '');
+
+                    let scale = 1.0;
+                    while (inner.scrollHeight > safeH && scale > 0.75) {
+                        scale -= 0.02;
+                        inner.style.fontSize = `${scale}em`;
+                        inner.style.lineHeight = `${Math.max(1.2, 1.6 * scale)}`;
+                        inner.querySelectorAll('.density-gap').forEach(el => { el.style.gap = `${Math.max(8, parseFloat(getComputedStyle(el).gap) * scale)}px`; });
+                        inner.querySelectorAll('.density-pad').forEach(el => { el.style.padding = `${Math.max(8, parseFloat(getComputedStyle(el).padding) * scale)}px`; });
+                    }
+                    if (inner.scrollHeight > safeH) {
+                        const finalScale = safeH / inner.scrollHeight;
+                        inner.style.transform = `scale(${finalScale})`; inner.style.transformOrigin = 'top center';
+                        inner.style.width = `${100 / finalScale}%`; inner.style.marginLeft = `${(100 - 100 / finalScale) / 2}%`;
+                    }
+                    inner.style.height = '';
+                });
+            }
+            document.fonts.ready.then(() => autoAdjustDensity());
+            window.addEventListener('resize', () => autoAdjustDensity());
+
+            function updateZoomUI() {
+                const pages = document.querySelectorAll('.pdf-page');
+                const containers = document.querySelectorAll('.capture-area-container');
+                const pw = currentPageSize.w, ph = currentPageSize.h;
+                pages.forEach(el => el.style.transform = `scale(${currentScale})`);
+                containers.forEach(c => { c.style.width = `${pw * currentScale}px`; c.style.height = `${ph * currentScale}px`; });
+                document.getElementById('zoom-level-text').innerText = `${Math.round(currentScale * 100)}%`;
+            }
+
+            function adjustZoom(newScale) {
+                const pc = document.getElementById('preview-container');
+                const pw = currentPageSize.w, ph = currentPageSize.h;
+                if (!pc) { currentScale = newScale; updateZoomUI(); return; }
+                const totalH = ph * document.querySelectorAll('.pdf-page').length;
+                const cx = (pc.scrollLeft + pc.clientWidth / 2) / (pw * currentScale);
+                const cy = (pc.scrollTop + pc.clientHeight / 2) / (totalH * currentScale);
+                currentScale = newScale; updateZoomUI();
+                pc.scrollLeft = cx * pw * currentScale - pc.clientWidth / 2;
+                pc.scrollTop = cy * totalH * currentScale - pc.clientHeight / 2;
+            }
+
+            function fitToScreen() {
+                const c = document.getElementById('preview-container');
+                if (!c) return;
+                currentScale = Math.max(0.1, Math.min((c.clientWidth - 20) / currentPageSize.w, (c.clientHeight - 40) / currentPageSize.h, 1.0));
+                updateZoomUI();
+            }
+
+            function generateCleanSource() {
+                const dc = document.documentElement.cloneNode(true);
+                dc.querySelectorAll('script').forEach(s => { const src = s.getAttribute('src') || '', id = s.getAttribute('id'); if (!(src.includes('tailwindcss.com') || src.includes('lucide') || src.includes('jspdf') || src.includes('html-to-image')) && id !== 'main-script') s.remove(); });
+                dc.querySelectorAll('style').forEach(s => { const t = s.textContent || ''; if (t.includes('.pdf-page') || t.includes('.preview-wrapper') || t.includes('.floating-zoom') || t.includes('.pdf-overlay') || t.includes('.draggable-image-wrapper') || t.includes('--page-w')) return; if (t.includes('--tw-') || t.includes('interaction') || t.includes('::backdrop')) s.remove(); });
+                dc.removeAttribute('style'); const body = dc.querySelector('body'); if (body) { body.removeAttribute('style'); body.classList.remove('is-capturing'); }
+                dc.querySelectorAll('.pdf-page[data-dynamic]').forEach(p => p.closest('.capture-area-container')?.remove());
+                const db = dc.querySelector('#downloadBtnText'); if (db) db.innerText = 'PDF保存';
+                const bd = dc.querySelector('#btn-download'); if (bd) bd.disabled = false;
+                const n = dc.querySelector('#notification'); if (n) n.classList.add('hidden');
+                const ov = dc.querySelector('#pdf-overlay'); if (ov) ov.classList.remove('active');
+                dc.querySelectorAll('.img-layer').forEach(layer => layer.innerHTML = '');
+                dc.querySelectorAll('svg[data-lucide]').forEach(svg => {
+                    const i = document.createElement('i'); i.setAttribute('data-lucide', svg.getAttribute('data-lucide'));
+                    const cls = svg.getAttribute('class'); if (cls) i.setAttribute('class', cls.replace(/lucide\s*lucide-[\w-]+\s*/g, '').trim());
+                    svg.replaceWith(i);
+                });
+                dc.querySelectorAll('.pdf-page, .page-inner, .capture-area-container, [data-flow-area], .density-pad, .density-gap').forEach(el => el.removeAttribute('style'));
+                const ic = dc.querySelector('#items-container'); if (ic) ic.innerHTML = '';
+                dc.querySelectorAll('[data-flow-area]').forEach(fa => fa.innerHTML = '');
+                let src = "<!DOCTYPE html>\n" + dc.outerHTML;
+                src = src.replace(/\/\* __INJECTED_DATA_START__ \*\/[\s\S]*?\/\* __INJECTED_DATA_END__ \*\//, `/* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = ${JSON.stringify(state)}; /* __INJECTED_DATA_END__ */`);
+                return src;
+            }
+
+            function handleOpenNewTab() {
+                const src = generateCleanSource();
+                const blobUrl = URL.createObjectURL(new Blob([src], { type: 'text/html' }));
+                const newTab = window.open(blobUrl, '_blank');
+                if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') { URL.revokeObjectURL(blobUrl); return; }
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+                showNotification('別タブで開きました', 'success');
+            }
+
+            async function handleCopyCode() {
+                const s = generateCleanSource();
+                try {
+                    await navigator.clipboard.writeText(s);
+                    showNotification('クリーンなコードをコピーしました！', 'success');
+                } catch (e) {
+                    try {
+                        const t = document.createElement("textarea"); t.value = s; t.style.cssText = "position:fixed;left:-9999px"; document.body.appendChild(t); t.select(); document.execCommand("copy"); document.body.removeChild(t);
+                        showNotification('コードをコピーしました', 'success');
+                    } catch (e2) { showNotification('コピーに失敗しました', 'error'); }
+                }
+            }
+
+            async function handleDownloadPDF() {
+                const btn = document.getElementById('btn-download'), txt = document.getElementById('downloadBtnText');
+                const overlay = document.getElementById('pdf-overlay');
+                if (btn.disabled) return;
+                btn.disabled = true; txt.innerText = '生成中...';
+                document.body.classList.add('is-capturing');
+                document.querySelectorAll('.draggable-image-wrapper').forEach(el => el.classList.remove('active'));
+                overlay.classList.add('active');
+                document.getElementById('preview-container').style.overflow = 'hidden';
+
+                try {
+                    await document.fonts.ready;
+                    const pages = document.querySelectorAll('.pdf-page');
+                    const pw = currentPageSize.w, ph = currentPageSize.h;
+                    const orient = currentPageSize.orient || 'p';
+                    const pdf = new jspdf.jsPDF({ orientation: orient, unit: 'mm', format: currentPageSize.pdf });
+                    const mmW = currentPageSize.mmW, mmH = currentPageSize.mmH;
+
+                    for (let i = 0; i < pages.length; i++) {
+                        if (i > 0) pdf.addPage();
+                        let canvas;
+                        try { canvas = await htmlToImage.toCanvas(pages[i], { pixelRatio: 3, quality: 0.95, backgroundColor: '#ffffff', width: pw, height: ph, skipFonts: false, preferredFontFormat: 'woff2', style: { transform: 'none', boxShadow: 'none' } }); }
+                        catch (ce) { throw new Error(`ページ${i + 1}の画像キャプチャに失敗しました。`); }
+                        const imgData = canvas.toDataURL('image/jpeg', 0.9);
+                        pdf.addImage(imgData, 'JPEG', 0, 0, mmW, mmH, undefined, 'FAST');
+                    }
+                    const cs = generateCleanSource();
+                    const enc = safeBase64Encode(JSON.stringify({ data: state, sourceCode: cs, appId: APP_ID }));
+                    const blob = new Blob([pdf.output('arraybuffer'), new TextEncoder().encode(`\n[START_FULL_DATA]${enc}[END_FULL_DATA]\n`)], { type: 'application/pdf' });
+                    const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+                    link.download = `アジェンダ_${state.date.replace(/[\/\s]/g, '')}.pdf`;
+                    link.click(); URL.revokeObjectURL(link.href);
+                    showNotification('PDFを保存しました', 'success');
+                } catch (err) {
+                    console.error(err); showNotification(err.message || 'エラーが発生しました', 'error');
+                } finally {
+                    document.body.classList.remove('is-capturing');
+                    overlay.classList.remove('active');
+                    document.getElementById('preview-container').style.overflow = '';
+                    btn.disabled = false; txt.innerText = 'PDF保存';
+                }
+            }
+
+            async function handleFileUpload(e) {
+                const file = e.target.files[0]; if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function () {
+                    try {
+                        const text = new TextDecoder().decode(new Uint8Array(reader.result));
+                        const sM = '[START_FULL_DATA]', eM = '[END_FULL_DATA]';
+                        const si = text.lastIndexOf(sM), ei = text.lastIndexOf(eM);
+                        if (si !== -1 && ei !== -1) {
+                            const payload = JSON.parse(safeBase64Decode(text.substring(si + sM.length, ei)));
+                            if (payload.sourceCode) {
+                                sessionStorage.setItem(RECOVERY_KEY, JSON.stringify({ data: payload.data }));
+                                const blobUrl = URL.createObjectURL(new Blob([payload.sourceCode], { type: 'text/html' }));
+                                const newTab = window.open(blobUrl, '_blank');
+                                if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') { URL.revokeObjectURL(blobUrl); return; }
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+                                showNotification('別タブで復元しました', 'success');
+                            } else if (payload.data) {
+                                state = { ...state, ...payload.data };
+                                syncFormInputs(); renderItemsForm(); updatePreview();
+                                showNotification('データを復元しました', 'success');
+                            }
+                        } else { showNotification('復元用データが見つかりません', 'error'); }
+                    } catch (err) { console.error('Restore error:', err); showNotification('読み込みエラー', 'error'); }
+                };
+                reader.readAsArrayBuffer(file); e.target.value = '';
+            }
+
+            function showNotification(msg, type = 'success') {
+                const el = document.getElementById('notification'), icon = document.getElementById('notification-icon');
+                document.getElementById('notification-message').innerText = msg;
+                el.classList.remove('hidden', 'bg-red-600', 'bg-slate-900');
+                el.classList.add(type === 'error' ? 'bg-red-600' : 'bg-slate-900');
+                if (icon) {
+                    icon.setAttribute('data-lucide', type === 'error' ? 'alert-triangle' : 'check-circle');
+                    icon.setAttribute('class', `w-5 h-5 ${type === 'error' ? 'text-red-300' : 'text-green-400'}`);
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+                el.classList.remove('hidden');
+                setTimeout(() => el.classList.add('hidden'), 4000);
+            }
+
+            init();
+        })();
+    </script>
+</body>
+</html>
