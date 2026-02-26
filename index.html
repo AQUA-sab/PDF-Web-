@@ -1,61 +1,221 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <!-- iPhoneでのズーム防止: maximum-scale=1, user-scalable=no -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>会議アジェンダ</title>
 
-    <link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@400;700;900&display=swap">
+    <link rel="stylesheet" crossorigin="anonymous"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@400;700;900&display=swap">
 
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <script src="https://unpkg.com/lucide@0.344.0" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"
+        crossorigin="anonymous"></script>
 
     <style>
-        :root { --page-w: 794px; --page-h: 1123px; }
-        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; overflow: hidden; background-color: #f1f5f9; margin: 0; }
-        .serif { font-family: 'Noto Serif JP', serif; }
-        .pdf-page { width: var(--page-w); height: var(--page-h); box-sizing: border-box; background-color: white; position: relative; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); flex-shrink: 0; transform-origin: top left; overflow: hidden; color: #1e293b; }
-        .preview-wrapper { display: grid; place-items: start center; padding: 20px 0; gap: 20px; width: 100%; min-height: 100%; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        :root {
+            --page-w: 794px;
+            --page-h: 1123px;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            overflow: hidden;
+            background-color: #f1f5f9;
+            margin: 0;
+        }
+
+        .serif {
+            font-family: 'Noto Serif JP', serif;
+        }
+
+        .pdf-page {
+            width: var(--page-w);
+            height: var(--page-h);
+            box-sizing: border-box;
+            background-color: white;
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            flex-shrink: 0;
+            transform-origin: top left;
+            overflow: hidden;
+            color: #1e293b;
+        }
+
+        .preview-wrapper {
+            display: grid;
+            place-items: start center;
+            padding: 20px 0;
+            gap: 20px;
+            width: 100%;
+            min-height: 100%;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
         /* ★ iPhone入力ズーム防止: 全inputに font-size: 16px 以上を強制 */
-        input, textarea, select {
+        input,
+        textarea,
+        select {
             font-size: 16px !important;
         }
-        input:focus, textarea:focus { outline: none; border-color: #2563eb; background-color: #fff; }
-        .input-group { display: flex; flex-direction: column; gap: 0.25rem; }
-        .label-text { font-size: 10px; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; padding-left: 0.25rem; }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+            background-color: #fff;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .label-text {
+            font-size: 10px;
+            font-weight: 900;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding-left: 0.25rem;
+        }
 
         /* フローティングズーム */
-        .floating-zoom { position: absolute; z-index: 40; bottom: 16px; left: 16px; opacity: 0.4; transition: opacity 0.2s ease; }
-        .floating-zoom:hover { opacity: 1; }
-        .floating-zoom:active { opacity: 1; }
+        .floating-zoom {
+            position: absolute;
+            z-index: 40;
+            bottom: 16px;
+            left: 16px;
+            opacity: 0.4;
+            transition: opacity 0.2s ease;
+        }
+
+        .floating-zoom:hover {
+            opacity: 1;
+        }
+
+        .floating-zoom:active {
+            opacity: 1;
+        }
 
         /* PDF生成オーバーレイ */
-        .pdf-overlay { position: absolute; inset: 0; z-index: 50; display: none; place-items: center; background: rgba(100, 116, 139, 0.75); backdrop-filter: blur(6px); }
-        .pdf-overlay.active { display: grid; }
-        .pdf-spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .pdf-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            place-items: center;
+            background: rgba(100, 116, 139, 0.75);
+            backdrop-filter: blur(6px);
+        }
+
+        .pdf-overlay.active {
+            display: grid;
+        }
+
+        .pdf-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
 
         /* 画像操作用 UI */
-        .draggable-image-wrapper { position: absolute; cursor: move; border: 2px dashed transparent; user-select: none; border-radius: 4px; transition: border-color 0.15s; }
-        .draggable-image-wrapper:hover, .draggable-image-wrapper.active { border-color: #3b82f6; z-index: 10; }
-        .resize-handle-img { position: absolute; right: -6px; bottom: -6px; width: 20px; height: 20px; background: #3b82f6; cursor: se-resize; display: none; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); touch-action: none; }
-        .delete-btn-img { position: absolute; top: -12px; right: -12px; width: 28px; height: 28px; background: #ef4444; color: white; display: none; place-items: center; border-radius: 50%; cursor: pointer; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.1s; }
-        .delete-btn-img:hover, .delete-btn-img:active { transform: scale(1.1); background: #dc2626; }
-        .draggable-image-wrapper:hover .resize-handle-img, .draggable-image-wrapper:hover .delete-btn-img,
-        .draggable-image-wrapper.active .resize-handle-img, .draggable-image-wrapper.active .delete-btn-img { display: grid; }
+        .draggable-image-wrapper {
+            position: absolute;
+            cursor: move;
+            border: 2px dashed transparent;
+            user-select: none;
+            border-radius: 4px;
+            transition: border-color 0.15s;
+        }
+
+        .draggable-image-wrapper:hover,
+        .draggable-image-wrapper.active {
+            border-color: #3b82f6;
+            z-index: 10;
+        }
+
+        .resize-handle-img {
+            position: absolute;
+            right: -6px;
+            bottom: -6px;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: se-resize;
+            display: none;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            touch-action: none;
+        }
+
+        .delete-btn-img {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            width: 28px;
+            height: 28px;
+            background: #ef4444;
+            color: white;
+            display: none;
+            place-items: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: transform 0.1s;
+        }
+
+        .delete-btn-img:hover,
+        .delete-btn-img:active {
+            transform: scale(1.1);
+            background: #dc2626;
+        }
+
+        .draggable-image-wrapper:hover .resize-handle-img,
+        .draggable-image-wrapper:hover .delete-btn-img,
+        .draggable-image-wrapper.active .resize-handle-img,
+        .draggable-image-wrapper.active .delete-btn-img {
+            display: grid;
+        }
 
         /* キャプチャ時クリーンアップ */
-        .is-capturing .draggable-image-wrapper { border-color: transparent !important; }
-        .is-capturing .resize-handle-img, .is-capturing .delete-btn-img { display: none !important; }
+        .is-capturing .draggable-image-wrapper {
+            border-color: transparent !important;
+        }
+
+        .is-capturing .resize-handle-img,
+        .is-capturing .delete-btn-img {
+            display: none !important;
+        }
 
         /* ====== スプリッターバー (iPhone向け縦分割) ====== */
         #splitter {
-            display: none; /* デスクトップでは非表示 */
+            display: none;
+            /* デスクトップでは非表示 */
             width: 100%;
             height: 14px;
             background: linear-gradient(to bottom, #cbd5e1 0%, #e2e8f0 50%, #cbd5e1 100%);
@@ -67,6 +227,7 @@
             border-top: 1px solid #94a3b8;
             border-bottom: 1px solid #94a3b8;
         }
+
         #splitter::before {
             content: '';
             display: block;
@@ -82,8 +243,15 @@
 
         /* レスポンシブ: 768px 以下で縦並び + スプリッター表示 */
         @media (max-width: 767px) {
-            body { overflow: hidden; }
-            #main-app-shell { flex-direction: column !important; height: 100vh; }
+            body {
+                overflow: hidden;
+            }
+
+            #main-app-shell {
+                flex-direction: column !important;
+                height: 100vh;
+            }
+
             #left-pane {
                 width: 100% !important;
                 height: var(--left-pane-h, 45vh) !important;
@@ -94,6 +262,7 @@
                 flex-shrink: 0 !important;
                 transition: height 0.05s;
             }
+
             #right-pane {
                 order: 1;
                 flex: none !important;
@@ -101,6 +270,7 @@
                 min-height: 80px;
                 transition: height 0.05s;
             }
+
             #splitter {
                 display: block;
                 order: 1.5;
@@ -108,10 +278,12 @@
         }
     </style>
 </head>
+
 <body class="h-screen flex flex-col">
 
     <!-- 通知エリア -->
-    <div id="notification" class="fixed top-6 left-1/2 -translate-x-1/2 z-[2000] flex items-center gap-3 px-6 py-3 rounded-2xl shadow-2xl bg-slate-900 text-white hidden text-sm font-bold tracking-tight">
+    <div id="notification"
+        class="fixed top-6 left-1/2 -translate-x-1/2 z-[2000] flex items-center gap-3 px-6 py-3 rounded-2xl shadow-2xl bg-slate-900 text-white hidden text-sm font-bold tracking-tight">
         <i id="notification-icon" data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
         <span id="notification-message">メッセージ</span>
     </div>
@@ -120,16 +292,21 @@
     <div id="main-app-shell" class="flex flex-row flex-1 overflow-hidden">
 
         <!-- 左ペイン: 入力フォーム -->
-        <aside id="left-pane" class="w-[380px] h-full bg-white overflow-y-auto p-5 flex-none border-r shadow-2xl z-20 scrollbar-hide text-slate-700">
+        <aside id="left-pane"
+            class="w-[380px] h-full bg-white overflow-y-auto p-5 flex-none border-r shadow-2xl z-20 scrollbar-hide text-slate-700">
             <!-- 操作ボタン群 -->
             <div class="flex items-center gap-2 mb-5">
                 <input type="file" id="fileInput" accept=".pdf" class="hidden">
-                <button id="btn-open-newtab" class="p-1.5 text-slate-300 hover:text-blue-500 transition-all shrink-0" title="別タブで開く">
+                <button id="btn-open-newtab" class="p-1.5 text-slate-300 hover:text-blue-500 transition-all shrink-0"
+                    title="別タブで開く">
                     <i data-lucide="external-link" class="w-4 h-4"></i>
                 </button>
-                <button id="btn-upload-trigger" class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">PDF読込</button>
-                <button id="btn-copy-code" class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">コードコピー</button>
-                <button id="btn-download" class="bg-slate-900 text-white px-3 py-2 rounded-lg font-bold text-xs hover:bg-blue-700 shadow-lg transition-all active:scale-95 whitespace-nowrap ml-auto">
+                <button id="btn-upload-trigger"
+                    class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">PDF読込</button>
+                <button id="btn-copy-code"
+                    class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">コードコピー</button>
+                <button id="btn-download"
+                    class="bg-slate-900 text-white px-3 py-2 rounded-lg font-bold text-xs hover:bg-blue-700 shadow-lg transition-all active:scale-95 whitespace-nowrap ml-auto">
                     <span id="downloadBtnText">PDF保存</span>
                 </button>
             </div>
@@ -137,36 +314,48 @@
             <div id="form-container" class="space-y-6">
                 <!-- 基本情報 -->
                 <section class="space-y-3">
-                    <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2 border-b pb-1"><i data-lucide="info" class="w-3 h-3"></i> 基本情報</h3>
-                    <div class="input-group"><label class="label-text">タイトル</label><input type="text" data-field="title" class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg font-bold text-slate-800"></div>
-                    <div class="input-group"><label class="label-text">日付</label><input type="text" data-field="date" class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg"></div>
+                    <h3
+                        class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2 border-b pb-1">
+                        <i data-lucide="info" class="w-3 h-3"></i> 基本情報</h3>
+                    <div class="input-group"><label class="label-text">タイトル</label><input type="text" data-field="title"
+                            class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg font-bold text-slate-800">
+                    </div>
+                    <div class="input-group"><label class="label-text">日付</label><input type="text" data-field="date"
+                            class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg"></div>
                 </section>
 
                 <!-- アジェンダ項目 -->
                 <section class="space-y-3">
                     <div class="flex items-center justify-between border-b pb-1">
-                        <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2"><i data-lucide="list-todo" class="w-3 h-3"></i> 協議事項・アジェンダ</h3>
+                        <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                            <i data-lucide="list-todo" class="w-3 h-3"></i> 協議事項・アジェンダ</h3>
                     </div>
                     <div id="items-container" class="space-y-3"></div>
-                    <button id="btn-add-item" class="text-xs text-blue-600 font-bold hover:text-blue-800 flex items-center gap-1 py-1"><i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> 項目を追加</button>
+                    <button id="btn-add-item"
+                        class="text-xs text-blue-600 font-bold hover:text-blue-800 flex items-center gap-1 py-1"><i
+                            data-lucide="plus-circle" class="w-3.5 h-3.5"></i> 項目を追加</button>
                 </section>
 
                 <!-- 拡張機能 -->
                 <section class="space-y-4 pt-2 border-t border-slate-100">
-                    <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2"><i data-lucide="layers" class="w-3 h-3"></i> 拡張ツール</h3>
+                    <h3 class="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2"><i
+                            data-lucide="layers" class="w-3 h-3"></i> 拡張ツール</h3>
 
                     <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-xs font-bold text-slate-600">画像を配置（自由に移動・リサイズ可）</span>
                         </div>
                         <input type="file" id="imageInput" accept="image/*" multiple class="hidden">
-                        <button id="btn-add-image" class="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-md font-bold text-xs hover:bg-slate-100 transition-all flex items-center justify-center gap-2 shadow-sm">
+                        <button id="btn-add-image"
+                            class="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-md font-bold text-xs hover:bg-slate-100 transition-all flex items-center justify-center gap-2 shadow-sm">
                             <i data-lucide="image-plus" class="w-4 h-4"></i> 画像をアップロード
                         </button>
                     </div>
 
-                    <label class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
-                        <input type="checkbox" id="chk-memo-page" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                    <label
+                        class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                        <input type="checkbox" id="chk-memo-page"
+                            class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
                         <div class="flex flex-col">
                             <span class="text-xs font-bold text-slate-700">汎用メモ用紙（罫線）を追加する</span>
                             <span class="text-[10px] text-slate-400">書類の最後に書き込み専用ページを作成</span>
@@ -200,7 +389,8 @@
                                     <div class="flex justify-end mb-4 text-sm text-slate-600">
                                         <span data-view="date" class="whitespace-nowrap">2026年2月26日</span>
                                     </div>
-                                    <h1 class="text-center text-2xl font-black tracking-widest text-slate-800 border-b-2 border-slate-800 pb-3 mb-2" data-view="title">月例開発チームミーティング アジェンダ</h1>
+                                    <h1 class="text-center text-2xl font-black tracking-widest text-slate-800 border-b-2 border-slate-800 pb-3 mb-2"
+                                        data-view="title">月例開発チームミーティング アジェンダ</h1>
                                 </div>
                                 <div data-flow-area class="flex-grow flex flex-col gap-6 pt-2 density-gap"></div>
                             </div>
@@ -212,10 +402,18 @@
             <!-- ズームコントロール -->
             <div class="floating-zoom">
                 <div class="flex items-center bg-white/90 backdrop-blur-md rounded-xl p-1 gap-0.5 border shadow-lg">
-                    <button id="btn-zoom-out" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="minus" class="w-4 h-4"></i></button>
-                    <button id="btn-zoom-fit" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="maximize" class="w-4 h-4"></i></button>
-                    <button id="btn-zoom-in" class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="plus" class="w-4 h-4"></i></button>
-                    <div id="zoom-level-text" class="px-2 text-[11px] font-black text-slate-500 min-w-[45px] text-center uppercase tracking-tighter">67%</div>
+                    <button id="btn-zoom-out"
+                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="minus"
+                            class="w-4 h-4"></i></button>
+                    <button id="btn-zoom-fit"
+                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i
+                            data-lucide="maximize" class="w-4 h-4"></i></button>
+                    <button id="btn-zoom-in"
+                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="plus"
+                            class="w-4 h-4"></i></button>
+                    <div id="zoom-level-text"
+                        class="px-2 text-[11px] font-black text-slate-500 min-w-[45px] text-center uppercase tracking-tighter">
+                        67%</div>
                 </div>
             </div>
         </div>
@@ -242,7 +440,7 @@
                 images: []
             };
 
-            /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = {"title":"月例開発チームミーティング アジェンダ","date":"2026年2月26日","includeMemoPage":true,"items":[{"heading":"前回の振り返り","content":"・新機能リリースの反響\n・発生した不具合の対応状況","memoLines":3},{"heading":"今月の目標共有","content":"・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）","memoLines":4},{"heading":"各担当からの進捗報告","content":"","memoLines":6}],"images":[]}; /* __INJECTED_DATA_END__ */
+            /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = { "title": "月例開発チームミーティング アジェンダ", "date": "2026年2月26日", "includeMemoPage": true, "items": [{ "heading": "前回の振り返り", "content": "・新機能リリースの反響\n・発生した不具合の対応状況", "memoLines": 3 }, { "heading": "今月の目標共有", "content": "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", "memoLines": 4 }, { "heading": "各担当からの進捗報告", "content": "", "memoLines": 6 }], "images": [] }; /* __INJECTED_DATA_END__ */
 
             const PAGE_SIZES = {
                 A4: { w: 794, h: 1123, label: 'A4', pdf: 'a4', orient: 'p', mmW: 210, mmH: 297 }
@@ -363,6 +561,8 @@
             let isImgResizing = false;
             let currentActiveImg = null;
             let imgStartX, imgStartY, imgStartLeft, imgStartTop, imgStartW, imgStartH;
+            // ★ 選択中の画像IDを記憶（再描画後もactiveクラスを復元するため）
+            let selectedImageId = null;
 
             function getPointerPos(e) {
                 // タッチイベントとマウスイベントを統一
@@ -379,9 +579,12 @@
                 function onImgPointerDown(e) {
                     const deleteBtn = e.target.closest('.delete-btn-img');
                     if (deleteBtn) {
+                        // 削除ボタンタップ: 即座に削除して選択解除
                         const id = e.target.closest('.draggable-image-wrapper').dataset.id;
+                        selectedImageId = null;
                         state.images = state.images.filter(img => img.id !== id);
                         updatePreview();
+                        e.stopPropagation(); e.preventDefault();
                         return;
                     }
 
@@ -392,6 +595,7 @@
                     if (resizeHandle) {
                         isImgResizing = true;
                         currentActiveImg = wrapper;
+                        selectedImageId = wrapper.dataset.id;
                         imgStartX = pos.x;
                         imgStartY = pos.y;
                         imgStartW = parseFloat(wrapper.style.width);
@@ -400,6 +604,7 @@
                     } else if (wrapper) {
                         isImgDragging = true;
                         currentActiveImg = wrapper;
+                        selectedImageId = wrapper.dataset.id;
                         imgStartX = pos.x;
                         imgStartY = pos.y;
                         imgStartLeft = parseFloat(wrapper.style.left);
@@ -407,6 +612,10 @@
                         document.querySelectorAll('.draggable-image-wrapper').forEach(el => el.classList.remove('active'));
                         wrapper.classList.add('active');
                         e.stopPropagation(); e.preventDefault();
+                    } else {
+                        // 画像以外をタップ → 選択解除
+                        selectedImageId = null;
+                        document.querySelectorAll('.draggable-image-wrapper').forEach(el => el.classList.remove('active'));
                     }
                 }
 
@@ -428,38 +637,53 @@
                 }
 
                 // ★ ポインターアップ（座標確定）
-                function onImgPointerUp() {
-                    if (isImgDragging || isImgResizing) {
-                        if (currentActiveImg) {
-                            const id = currentActiveImg.dataset.id;
-                            const imgData = state.images.find(img => img.id === id);
-                            if (imgData) {
-                                let newLeft = parseFloat(currentActiveImg.style.left);
-                                let newTop = parseFloat(currentActiveImg.style.top);
-                                imgData.width = parseFloat(currentActiveImg.style.width);
-                                imgData.height = parseFloat(currentActiveImg.style.height);
+                function onImgPointerUp(e) {
+                    if (!isImgDragging && !isImgResizing) return;
 
-                                let currentPage = imgData.page || 0;
-                                const ph = currentPageSize.h;
-                                if (newTop > ph) {
-                                    const pagesShift = Math.floor(newTop / ph);
-                                    currentPage += pagesShift;
-                                    newTop -= (ph * pagesShift);
-                                } else if (newTop < 0 && currentPage > 0) {
-                                    const pagesShift = Math.ceil(Math.abs(newTop) / ph);
-                                    currentPage = Math.max(0, currentPage - pagesShift);
-                                    newTop += (ph * pagesShift);
-                                }
-                                imgData.x = newLeft;
-                                imgData.y = newTop;
-                                imgData.page = currentPage;
-                            }
-                        }
+                    const pos = getPointerPos(e) || { x: imgStartX, y: imgStartY };
+                    const movedX = Math.abs(pos.x - imgStartX);
+                    const movedY = Math.abs(pos.y - imgStartY);
+                    const isTap = movedX < 6 && movedY < 6; // 6px未満の移動はタップとみなす
+
+                    if (isTap) {
+                        // タップ: stateは変えずにrenderImagesだけ呼んでactiveクラスを表示
                         isImgDragging = false;
                         isImgResizing = false;
                         currentActiveImg = null;
-                        updatePreview();
+                        renderImages(); // ★ selectedImageId を反映するだけ
+                        return;
                     }
+
+                    // ドラッグ/リサイズ: stateを更新してからupdatePreview
+                    if (currentActiveImg) {
+                        const id = currentActiveImg.dataset.id;
+                        const imgData = state.images.find(img => img.id === id);
+                        if (imgData) {
+                            let newLeft = parseFloat(currentActiveImg.style.left);
+                            let newTop = parseFloat(currentActiveImg.style.top);
+                            imgData.width = parseFloat(currentActiveImg.style.width);
+                            imgData.height = parseFloat(currentActiveImg.style.height);
+
+                            let currentPage = imgData.page || 0;
+                            const ph = currentPageSize.h;
+                            if (newTop > ph) {
+                                const pagesShift = Math.floor(newTop / ph);
+                                currentPage += pagesShift;
+                                newTop -= (ph * pagesShift);
+                            } else if (newTop < 0 && currentPage > 0) {
+                                const pagesShift = Math.ceil(Math.abs(newTop) / ph);
+                                currentPage = Math.max(0, currentPage - pagesShift);
+                                newTop += (ph * pagesShift);
+                            }
+                            imgData.x = newLeft;
+                            imgData.y = newTop;
+                            imgData.page = currentPage;
+                        }
+                    }
+                    isImgDragging = false;
+                    isImgResizing = false;
+                    currentActiveImg = null;
+                    updatePreview();
                 }
 
                 // マウスイベント
@@ -520,7 +744,8 @@
                     const imgLayer = targetPage.querySelector('.img-layer');
 
                     const wrapper = document.createElement('div');
-                    wrapper.className = 'draggable-image-wrapper pointer-events-auto';
+                    // ★ 選択中の画像には即座にactiveクラスを付与（再描画後も維持）
+                    wrapper.className = 'draggable-image-wrapper pointer-events-auto' + (imgData.id === selectedImageId ? ' active' : '');
                     wrapper.dataset.id = imgData.id;
                     wrapper.style.left = `${imgData.x}px`;
                     wrapper.style.top = `${imgData.y}px`;
@@ -899,4 +1124,5 @@
         })();
     </script>
 </body>
+
 </html>
