@@ -275,29 +275,44 @@
                 height: 100vh;
             }
 
-            /* 上: プレビュー(order:1) → スプリッター(order:2) → 下: フォーム(order:3) */
+            /* DOM順序: right-pane → splitter → left-pane なので order 不要 */
             #right-pane {
-                order: 1;
                 flex: none !important;
-                height: var(--right-pane-h, 45vh) !important;
+                height: var(--right-pane-h, 50vh) !important;
                 min-height: 80px;
                 transition: height 0.05s;
+                width: 100% !important;
             }
 
             #splitter {
                 display: block;
-                order: 2;
             }
 
             #left-pane {
-                order: 3;
                 width: 100% !important;
-                height: var(--left-pane-h, 45vh) !important;
+                height: var(--left-pane-h, calc(50vh - 14px)) !important;
                 max-height: none !important;
                 border-right: none !important;
                 border-top: none;
                 flex-shrink: 0 !important;
                 transition: height 0.05s;
+            }
+        }
+
+        /* デスクトップ: DOM順序は right-pane→splitter→left-paneなので、
+           CSS orderで左(form)・右(preview)に並び替える */
+        @media (min-width: 768px) {
+            #left-pane {
+                order: 1;
+            }
+
+            #splitter {
+                order: 2;
+            }
+
+            /* display:noneのまま */
+            #right-pane {
+                order: 3;
             }
         }
     </style>
@@ -315,7 +330,60 @@
     <!-- メインアプリ -->
     <div id="main-app-shell" class="flex flex-row flex-1 overflow-hidden">
 
-        <!-- 左ペイン: 入力フォーム -->
+        <!-- 右ペイン: プレビュー (DOM上1番目 = モバイルで上、デスクトップはCSSorderで右) -->
+        <div id="right-pane" class="flex-1 flex flex-col overflow-hidden bg-slate-200 relative">
+            <main id="preview-container" class="flex-1 overflow-auto bg-slate-200 relative">
+                <!-- PDF生成オーバーレイ -->
+                <div id="pdf-overlay" class="pdf-overlay">
+                    <div class="flex flex-col items-center gap-4">
+                        <div class="pdf-spinner"></div>
+                        <p class="text-white font-bold text-sm tracking-wide">PDF生成中...</p>
+                    </div>
+                </div>
+
+                <div class="preview-wrapper">
+                    <div class="capture-area-container">
+                        <!-- ページ1 -->
+                        <div class="pdf-page relative" data-page="0">
+                            <div class="img-layer absolute inset-0 z-40 pointer-events-none"></div>
+                            <div class="page-inner flex flex-col h-full p-[50px]">
+                                <div class="mb-6">
+                                    <div class="flex justify-end mb-4 text-sm text-slate-600">
+                                        <span data-view="date" class="whitespace-nowrap">2026年2月26日</span>
+                                    </div>
+                                    <h1 class="text-center text-2xl font-black tracking-widest text-slate-800 border-b-2 border-slate-800 pb-3 mb-2"
+                                        data-view="title">月例開発チームミーティング アジェンダ</h1>
+                                </div>
+                                <div data-flow-area class="flex-grow flex flex-col gap-6 pt-2 density-gap"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- ズームコントロール -->
+            <div class="floating-zoom">
+                <div class="flex items-center bg-white/90 backdrop-blur-md rounded-xl p-1 gap-0.5 border shadow-lg">
+                    <button id="btn-zoom-out"
+                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="minus"
+                            class="w-4 h-4"></i></button>
+                    <button id="btn-zoom-fit"
+                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i
+                            data-lucide="maximize" class="w-4 h-4"></i></button>
+                    <button id="btn-zoom-in"
+                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="plus"
+                            class="w-4 h-4"></i></button>
+                    <div id="zoom-level-text"
+                        class="px-2 text-[11px] font-black text-slate-500 min-w-[45px] text-center uppercase tracking-tighter">
+                        67%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ★ スプリッターバー: DOM上2番目 = モバイルでプレビューとフォームの境目に自然配置 -->
+        <div id="splitter"></div>
+
+        <!-- 左ペイン: 入力フォーム (DOM上3番目 = モバイルで下、デスクトップはCSSorderで左) -->
         <aside id="left-pane"
             class="w-[380px] h-full bg-white overflow-y-auto p-5 flex-none border-r shadow-2xl z-20 scrollbar-hide text-slate-700">
             <!-- 操作ボタン群 -->
@@ -390,59 +458,6 @@
                 </section>
             </div>
         </aside>
-
-        <!-- ★ スプリッターバー (iPhoneで縦方向ドラッグで分割位置を変更) -->
-        <div id="splitter"></div>
-
-        <!-- 右ペイン: プレビュー -->
-        <div id="right-pane" class="flex-1 flex flex-col overflow-hidden bg-slate-200 relative">
-            <main id="preview-container" class="flex-1 overflow-auto bg-slate-200 relative">
-                <!-- PDF生成オーバーレイ -->
-                <div id="pdf-overlay" class="pdf-overlay">
-                    <div class="flex flex-col items-center gap-4">
-                        <div class="pdf-spinner"></div>
-                        <p class="text-white font-bold text-sm tracking-wide">PDF生成中...</p>
-                    </div>
-                </div>
-
-                <div class="preview-wrapper">
-                    <div class="capture-area-container">
-                        <!-- ページ1 -->
-                        <div class="pdf-page relative" data-page="0">
-                            <div class="img-layer absolute inset-0 z-40 pointer-events-none"></div>
-                            <div class="page-inner flex flex-col h-full p-[50px]">
-                                <div class="mb-6">
-                                    <div class="flex justify-end mb-4 text-sm text-slate-600">
-                                        <span data-view="date" class="whitespace-nowrap">2026年2月26日</span>
-                                    </div>
-                                    <h1 class="text-center text-2xl font-black tracking-widest text-slate-800 border-b-2 border-slate-800 pb-3 mb-2"
-                                        data-view="title">月例開発チームミーティング アジェンダ</h1>
-                                </div>
-                                <div data-flow-area class="flex-grow flex flex-col gap-6 pt-2 density-gap"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
-
-            <!-- ズームコントロール -->
-            <div class="floating-zoom">
-                <div class="flex items-center bg-white/90 backdrop-blur-md rounded-xl p-1 gap-0.5 border shadow-lg">
-                    <button id="btn-zoom-out"
-                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="minus"
-                            class="w-4 h-4"></i></button>
-                    <button id="btn-zoom-fit"
-                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i
-                            data-lucide="maximize" class="w-4 h-4"></i></button>
-                    <button id="btn-zoom-in"
-                        class="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 transition-all"><i data-lucide="plus"
-                            class="w-4 h-4"></i></button>
-                    <div id="zoom-level-text"
-                        class="px-2 text-[11px] font-black text-slate-500 min-w-[45px] text-center uppercase tracking-tighter">
-                        67%</div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script id="main-script">
