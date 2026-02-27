@@ -604,24 +604,29 @@
                 let isDragging = false;
                 let startY = 0;
                 let startLeftH = 0;
+                let startRightH = 0;
                 let rafId = null;
                 let latestClientY = 0;
 
                 function applyResize() {
-                    const shellH = shell.offsetHeight - splitter.offsetHeight;
+                    // DOM順: right-pane(上) → splitter → left-pane(下)
+                    // 指を下に動かすと dy>0 → right-pane大きく・left-pane小さくなる
+                    const splitterH = splitter.offsetHeight;
+                    const shellH = shell.offsetHeight - splitterH;
                     const dy = latestClientY - startY;
-                    const newLeftH = Math.max(80, Math.min(startLeftH - dy, shellH - 80));
-                    const newRightH = shellH - newLeftH;
-                    leftPane.style.height = newLeftH + 'px';
+                    const newRightH = Math.max(80, Math.min(startRightH + dy, shellH - 80));
+                    const newLeftH = shellH - newRightH;
                     rightPane.style.height = newRightH + 'px';
+                    leftPane.style.height = newLeftH + 'px';
                     rafId = null;
                 }
 
                 function onSplitterStart(e) {
-                    if (window.innerWidth > 767) return;
                     isDragging = true;
-                    startY = e.touches ? e.touches[0].clientY : e.clientY;
+                    const touch = e.touches ? e.touches[0] : e;
+                    startY = touch.clientY;
                     latestClientY = startY;
+                    startRightH = rightPane.offsetHeight;
                     startLeftH = leftPane.offsetHeight;
                     // ドラッグ中はtransitionを無効化して即時反映
                     leftPane.style.transition = 'none';
@@ -902,8 +907,10 @@
                     const row = document.createElement('div');
                     row.className = 'bg-slate-50 border border-slate-100 p-3 rounded-lg flex flex-col gap-2 relative group';
                     row.innerHTML = `
-                        <button class="btn-del-item absolute top-2 right-2 text-slate-300 hover:text-red-500 hidden group-hover:block" data-idx="${i}"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        <input type="text" placeholder="見出し (例: 進捗報告)" value="${item.heading}" class="item-field w-full p-2 bg-white border border-slate-200 rounded font-bold" data-idx="${i}" data-key="heading">
+                        <div class="flex items-center gap-2">
+                            <input type="text" placeholder="見出し (例: 進捗報告)" value="${item.heading}" class="item-field flex-1 p-2 bg-white border border-slate-200 rounded font-bold" data-idx="${i}" data-key="heading">
+                            <button class="btn-del-item flex-shrink-0 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" data-idx="${i}" title="削除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
                         <textarea placeholder="内容（任意）" class="item-field w-full p-2 bg-white border border-slate-200 rounded leading-relaxed resize-none h-16" data-idx="${i}" data-key="content">${item.content}</textarea>
                         <div class="flex items-center gap-2 mt-1">
                             <span class="text-[10px] text-slate-500 font-bold">協議メモ欄の行数:</span>
