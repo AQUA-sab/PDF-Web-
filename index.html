@@ -278,8 +278,8 @@
             display: none;
             /* デスクトップでは非表示 */
             width: 100%;
-            height: 14px;
-            background: linear-gradient(to bottom, #cbd5e1 0%, #e2e8f0 50%, #cbd5e1 100%);
+            height: 28px;
+            background: linear-gradient(to bottom, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
             cursor: ns-resize;
             flex-shrink: 0;
             position: relative;
@@ -287,19 +287,31 @@
             touch-action: none;
             border-top: 1px solid #94a3b8;
             border-bottom: 1px solid #94a3b8;
+            /* タッチ時の反応を見やすくする */
+            transition: background 0.15s;
+        }
+
+        #splitter.dragging {
+            background: linear-gradient(to bottom, #bfdbfe 0%, #dbeafe 50%, #bfdbfe 100%);
         }
 
         #splitter::before {
             content: '';
             display: block;
-            width: 40px;
-            height: 4px;
+            width: 48px;
+            height: 5px;
             background: #94a3b8;
-            border-radius: 2px;
+            border-radius: 3px;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            transition: background 0.15s, width 0.15s;
+        }
+
+        #splitter.dragging::before {
+            background: #3b82f6;
+            width: 60px;
         }
 
         /* レスポンシブ: 768px 以下で縦並び + スプリッター表示 */
@@ -318,7 +330,8 @@
                 flex: none !important;
                 height: var(--right-pane-h, 50vh) !important;
                 min-height: 80px;
-                transition: height 0.05s;
+                /* ドラッグ中はtransitionなし、通常時のみスムーズ */
+                transition: height 0.0s;
                 width: 100% !important;
             }
 
@@ -328,12 +341,12 @@
 
             #left-pane {
                 width: 100% !important;
-                height: var(--left-pane-h, calc(50vh - 14px)) !important;
+                height: var(--left-pane-h, calc(50vh - 28px)) !important;
                 max-height: none !important;
                 border-right: none !important;
                 border-top: none;
                 flex-shrink: 0 !important;
-                transition: height 0.05s;
+                transition: height 0.0s;
             }
         }
 
@@ -591,44 +604,58 @@
                 let isDragging = false;
                 let startY = 0;
                 let startLeftH = 0;
-                let startRightH = 0;
+                let rafId = null;
+                let latestClientY = 0;
+
+                function applyResize() {
+                    const shellH = shell.offsetHeight - splitter.offsetHeight;
+                    const dy = latestClientY - startY;
+                    const newLeftH = Math.max(80, Math.min(startLeftH - dy, shellH - 80));
+                    const newRightH = shellH - newLeftH;
+                    leftPane.style.height = newLeftH + 'px';
+                    rightPane.style.height = newRightH + 'px';
+                    rafId = null;
+                }
 
                 function onSplitterStart(e) {
-                    // スマホ判定
                     if (window.innerWidth > 767) return;
                     isDragging = true;
                     startY = e.touches ? e.touches[0].clientY : e.clientY;
+                    latestClientY = startY;
                     startLeftH = leftPane.offsetHeight;
-                    startRightH = rightPane.offsetHeight;
+                    // ドラッグ中はtransitionを無効化して即時反映
+                    leftPane.style.transition = 'none';
+                    rightPane.style.transition = 'none';
+                    splitter.classList.add('dragging');
                     e.preventDefault();
                 }
 
                 function onSplitterMove(e) {
                     if (!isDragging) return;
-                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                    const dy = clientY - startY;
-                    const shellH = shell.offsetHeight - splitter.offsetHeight;
-                    const newLeftH = Math.max(80, Math.min(startLeftH - dy, shellH - 80));
-                    const newRightH = shellH - newLeftH;
-                    leftPane.style.setProperty('--left-pane-h', newLeftH + 'px');
-                    rightPane.style.setProperty('--right-pane-h', newRightH + 'px');
-                    // CSS変数をシェル上で適用
-                    leftPane.style.height = newLeftH + 'px';
-                    rightPane.style.height = newRightH + 'px';
-                    e.preventDefault();
+                    latestClientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    // requestAnimationFrameでまとめて描画（60fps上限で滑らか）
+                    if (!rafId) {
+                        rafId = requestAnimationFrame(applyResize);
+                    }
+                    if (e.cancelable) e.preventDefault();
                 }
 
                 function onSplitterEnd() {
-                    if (isDragging) {
-                        isDragging = false;
-                        fitToScreen();
-                    }
+                    if (!isDragging) return;
+                    isDragging = false;
+                    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+                    // ドラッグ終了後にtransitionを元に戻す
+                    leftPane.style.transition = '';
+                    rightPane.style.transition = '';
+                    splitter.classList.remove('dragging');
+                    fitToScreen();
                 }
 
-                // タッチイベント
+                // タッチイベント (passive:falseはstartのみ。moveはwindowに登録)
                 splitter.addEventListener('touchstart', onSplitterStart, { passive: false });
                 window.addEventListener('touchmove', onSplitterMove, { passive: false });
-                window.addEventListener('touchend', onSplitterEnd);
+                window.addEventListener('touchend', onSplitterEnd, { passive: true });
+                window.addEventListener('touchcancel', onSplitterEnd, { passive: true });
                 // マウスイベント（デスクトップでもモバイルエミュレータ用）
                 splitter.addEventListener('mousedown', onSplitterStart);
                 window.addEventListener('mousemove', onSplitterMove);
