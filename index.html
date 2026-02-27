@@ -956,21 +956,11 @@
                         flowArea.appendChild(block);
                     });
 
-                    if (state.includeMemoPage) {
-                        const memoBlock = document.createElement('div');
-                        memoBlock.className = 'flow-block';
-                        memoBlock.innerHTML = `
-                            <div class="pt-8">
-                                <h2 class="text-lg font-bold mb-4 text-slate-800 border-l-4 border-slate-300 pl-3 uppercase tracking-widest text-slate-400">Memo</h2>
-                                <div class="flex flex-col gap-0 border-t border-slate-400">
-                                    ${Array(24).fill('<div class="h-[40px] border-b border-slate-300"></div>').join('')}
-                                </div>
-                            </div>`;
-                        flowArea.appendChild(memoBlock);
-                    }
+                    // 汎用メモページはautoPaginate()後に独立したページとして追加するため、ここでは追加しない
                 }
 
                 autoPaginate();
+                addMemoPageIfNeeded();
                 renderImages();
                 autoAdjustDensity();
             }
@@ -1044,6 +1034,50 @@
                         pageCount--;
                     }
                 }
+                updateZoomUI();
+            }
+
+            // ====== 汎用メモページを常に最後の独立ページとして追加 ======
+            function addMemoPageIfNeeded() {
+                // 既存のメモページを削除
+                document.querySelectorAll('.memo-only-page').forEach(p => {
+                    p.closest('.capture-area-container')?.remove();
+                });
+                if (!state.includeMemoPage) return;
+
+                const wrapper = document.querySelector('.preview-wrapper');
+                if (!wrapper) return;
+
+                // 現在の全ページ数を取得して新ページの番号を決定
+                const existingPages = document.querySelectorAll('.pdf-page');
+                const newPageIndex = existingPages.length;
+
+                const newContainer = document.createElement('div');
+                newContainer.className = 'capture-area-container';
+                newContainer.style.position = 'relative';
+
+                const newPage = document.createElement('div');
+                newPage.className = 'pdf-page relative memo-only-page';
+                newPage.setAttribute('data-page', String(newPageIndex));
+                newPage.setAttribute('data-dynamic', 'true');
+
+                const imgLayer = document.createElement('div');
+                imgLayer.className = 'img-layer absolute inset-0 z-40 pointer-events-none';
+                newPage.appendChild(imgLayer);
+
+                const newInner = document.createElement('div');
+                newInner.className = 'page-inner flex flex-col h-full p-[50px]';
+                newInner.innerHTML = `
+                    <div class="pt-4">
+                        <h2 class="text-lg font-bold mb-4 border-l-4 border-slate-300 pl-3 uppercase tracking-widest text-slate-400">Memo</h2>
+                        <div class="flex flex-col gap-0 border-t border-slate-400">
+                            ${Array(28).fill('<div class="h-[34px] border-b border-slate-300"></div>').join('')}
+                        </div>
+                    </div>`;
+                newPage.appendChild(newInner);
+                newContainer.appendChild(newPage);
+                wrapper.appendChild(newContainer);
+
                 updateZoomUI();
             }
 
