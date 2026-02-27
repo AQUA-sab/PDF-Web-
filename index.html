@@ -603,65 +603,51 @@
 
                 let isDragging = false;
                 let startY = 0;
-                let startLeftH = 0;
                 let startRightH = 0;
-                let rafId = null;
-                let latestClientY = 0;
+                let startLeftH = 0;
 
-                function applyResize() {
-                    // DOM順: right-pane(上) → splitter → left-pane(下)
-                    // 指を下に動かすと dy>0 → right-pane大きく・left-pane小さくなる
-                    const splitterH = splitter.offsetHeight;
-                    const shellH = shell.offsetHeight - splitterH;
-                    const dy = latestClientY - startY;
-                    const newRightH = Math.max(80, Math.min(startRightH + dy, shellH - 80));
-                    const newLeftH = shellH - newRightH;
+                function setHeights(newRightH, newLeftH) {
+                    // CSSに height: var(--right-pane-h) !important があるため
+                    // CSS変数を更新しないとインラインstyleが!importantで上書きされる
+                    rightPane.style.setProperty('--right-pane-h', newRightH + 'px');
+                    leftPane.style.setProperty('--left-pane-h', newLeftH + 'px');
                     rightPane.style.height = newRightH + 'px';
                     leftPane.style.height = newLeftH + 'px';
-                    rafId = null;
                 }
 
                 function onSplitterStart(e) {
                     isDragging = true;
-                    const touch = e.touches ? e.touches[0] : e;
-                    startY = touch.clientY;
-                    latestClientY = startY;
+                    startY = e.touches ? e.touches[0].clientY : e.clientY;
                     startRightH = rightPane.offsetHeight;
                     startLeftH = leftPane.offsetHeight;
-                    // ドラッグ中はtransitionを無効化して即時反映
-                    leftPane.style.transition = 'none';
-                    rightPane.style.transition = 'none';
                     splitter.classList.add('dragging');
                     e.preventDefault();
                 }
 
                 function onSplitterMove(e) {
                     if (!isDragging) return;
-                    latestClientY = e.touches ? e.touches[0].clientY : e.clientY;
-                    // requestAnimationFrameでまとめて描画（60fps上限で滑らか）
-                    if (!rafId) {
-                        rafId = requestAnimationFrame(applyResize);
-                    }
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    // DOM順: right-pane(上) → splitter → left-pane(下)
+                    // 指を下に動かすと dy>0 → right-pane拡大・left-pane縮小
+                    const dy = clientY - startY;
+                    const shellH = shell.offsetHeight - splitter.offsetHeight;
+                    const newRightH = Math.max(80, Math.min(startRightH + dy, shellH - 80));
+                    const newLeftH = shellH - newRightH;
+                    setHeights(newRightH, newLeftH);
                     if (e.cancelable) e.preventDefault();
                 }
 
                 function onSplitterEnd() {
                     if (!isDragging) return;
                     isDragging = false;
-                    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-                    // ドラッグ終了後にtransitionを元に戻す
-                    leftPane.style.transition = '';
-                    rightPane.style.transition = '';
                     splitter.classList.remove('dragging');
                     fitToScreen();
                 }
 
-                // タッチイベント (passive:falseはstartのみ。moveはwindowに登録)
                 splitter.addEventListener('touchstart', onSplitterStart, { passive: false });
-                window.addEventListener('touchmove', onSplitterMove, { passive: false });
-                window.addEventListener('touchend', onSplitterEnd, { passive: true });
-                window.addEventListener('touchcancel', onSplitterEnd, { passive: true });
-                // マウスイベント（デスクトップでもモバイルエミュレータ用）
+                document.addEventListener('touchmove', onSplitterMove, { passive: false });
+                document.addEventListener('touchend', onSplitterEnd, { passive: true });
+                document.addEventListener('touchcancel', onSplitterEnd, { passive: true });
                 splitter.addEventListener('mousedown', onSplitterStart);
                 window.addEventListener('mousemove', onSplitterMove);
                 window.addEventListener('mouseup', onSplitterEnd);
