@@ -218,10 +218,47 @@
             background: #dc2626;
         }
 
+        /* 回転ボタン */
+        .rotate-btn-img {
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            width: 44px;
+            height: 44px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .rotate-btn-img::after {
+            content: '↻';
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            background: #3b82f6;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+            transition: transform 0.2s;
+        }
+
+        .rotate-btn-img:active::after {
+            transform: rotate(90deg) scale(1.15);
+        }
+
         .draggable-image-wrapper:hover .resize-handle-img,
         .draggable-image-wrapper:hover .delete-btn-img,
+        .draggable-image-wrapper:hover .rotate-btn-img,
         .draggable-image-wrapper.active .resize-handle-img,
-        .draggable-image-wrapper.active .delete-btn-img {
+        .draggable-image-wrapper.active .delete-btn-img,
+        .draggable-image-wrapper.active .rotate-btn-img {
             display: flex;
         }
 
@@ -231,7 +268,8 @@
         }
 
         .is-capturing .resize-handle-img,
-        .is-capturing .delete-btn-img {
+        .is-capturing .delete-btn-img,
+        .is-capturing .rotate-btn-img {
             display: none !important;
         }
 
@@ -395,8 +433,8 @@
                 </button>
                 <button id="btn-upload-trigger"
                     class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">PDF読込</button>
-                <button id="btn-copy-code"
-                    class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-slate-50 transition-all whitespace-nowrap shadow-sm">コードコピー</button>
+                <button id="btn-clear-form"
+                    class="px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-bold text-xs hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-all whitespace-nowrap shadow-sm">クリア</button>
                 <button id="btn-download"
                     class="bg-slate-900 text-white px-3 py-2 rounded-lg font-bold text-xs hover:bg-blue-700 shadow-lg transition-all active:scale-95 whitespace-nowrap ml-auto">
                     <span id="downloadBtnText">PDF保存</span>
@@ -472,7 +510,7 @@
             let state = {
                 title: "月例開発チームミーティング アジェンダ",
                 date: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }),
-                includeMemoPage: true,
+                includeMemoPage: false,
                 items: [
                     { heading: "前回の振り返り", content: "・新機能リリースの反響\n・発生した不具合の対応状況", memoLines: 3 },
                     { heading: "今月の目標共有", content: "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", memoLines: 4 },
@@ -481,7 +519,7 @@
                 images: []
             };
 
-            /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = { "title": "月例開発チームミーティング アジェンダ", "date": "2026年2月26日", "includeMemoPage": true, "items": [{ "heading": "前回の振り返り", "content": "・新機能リリースの反響\n・発生した不具合の対応状況", "memoLines": 3 }, { "heading": "今月の目標共有", "content": "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", "memoLines": 4 }, { "heading": "各担当からの進捗報告", "content": "", "memoLines": 6 }], "images": [] }; /* __INJECTED_DATA_END__ */
+            /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = { "title": "月例開発チームミーティング アジェンダ", "date": "2026年2月26日", "includeMemoPage": false, "items": [{ "heading": "前回の振り返り", "content": "・新機能リリースの反響\n・発生した不具合の対応状況", "memoLines": 3 }, { "heading": "今月の目標共有", "content": "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", "memoLines": 4 }, { "heading": "各担当からの進捗報告", "content": "", "memoLines": 6 }], "images": [] }; /* __INJECTED_DATA_END__ */
 
             const PAGE_SIZES = {
                 A4: { w: 794, h: 1123, label: 'A4', pdf: 'a4', orient: 'p', mmW: 210, mmH: 297 }
@@ -519,7 +557,7 @@
                 document.getElementById('btn-upload-trigger').addEventListener('click', () => document.getElementById('fileInput').click());
                 document.getElementById('fileInput').addEventListener('change', handleFileUpload);
                 document.getElementById('btn-download').addEventListener('click', handleDownloadPDF);
-                document.getElementById('btn-copy-code').addEventListener('click', handleCopyCode);
+                document.getElementById('btn-clear-form').addEventListener('click', handleClearForm);
                 document.getElementById('btn-open-newtab').addEventListener('click', handleOpenNewTab);
 
                 document.getElementById('btn-zoom-in').addEventListener('click', () => adjustZoom(Math.min(currentScale + 0.1, 2)));
@@ -708,7 +746,8 @@
                                 base64: base64,
                                 x: 100, y: 150,
                                 width: initW, height: initH,
-                                page: 0
+                                page: 0,
+                                rotation: 0
                             });
                             updatePreview();
                         };
@@ -749,7 +788,9 @@
                     // 画像本体
                     const img = document.createElement('img');
                     img.src = imgData.base64;
+                    const rot = imgData.rotation || 0;
                     img.style.cssText = 'width:100%;height:100%;object-fit:contain;' +
+                        `transform:rotate(${rot}deg);` +
                         'pointer-events:none;user-select:none;-webkit-user-drag:none;display:block;';
 
                     // ★ 削除ボタン — 直接イベント登録（iPhoneでのイベントデリゲート不具合回避）
@@ -799,9 +840,29 @@
                     wrapper.addEventListener('touchstart', onWrapperStart, { passive: false });
                     wrapper.addEventListener('mousedown', onWrapperStart);
 
+                    // ★ 回転ボタン — 直接イベント登録
+                    const rotateBtn = document.createElement('div');
+                    rotateBtn.className = 'rotate-btn-img';
+                    function doRotate(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        isImgDragging = false; isImgResizing = false; currentActiveImg = null;
+                        selectedImageId = imgData.id;
+                        imgData.rotation = ((imgData.rotation || 0) + 90) % 360;
+                        // 幅・高さを入れ替え（90°回転のたびに縦横比を反転）
+                        const oldW = imgData.width;
+                        const oldH = imgData.height;
+                        imgData.width = oldH;
+                        imgData.height = oldW;
+                        updatePreview();
+                    }
+                    rotateBtn.addEventListener('touchstart', doRotate, { passive: false });
+                    rotateBtn.addEventListener('mousedown', doRotate);
+
                     wrapper.appendChild(img);
                     wrapper.appendChild(resizeHandle);
                     wrapper.appendChild(deleteBtn);
+                    wrapper.appendChild(rotateBtn);
                     imgLayer.appendChild(wrapper);
                 });
                 // lucide不要（ボタンはCSSデコレーターで表示）
@@ -1068,6 +1129,19 @@
                         showNotification('コードをコピーしました', 'success');
                     } catch (e2) { showNotification('コピーに失敗しました', 'error'); }
                 }
+            }
+
+            function handleClearForm() {
+                if (!confirm('入力した内容と挿入された画像をすべて消去します。よろしいですか？')) return;
+                state.title = '';
+                state.date = '';
+                state.items = [];
+                state.images = [];
+                state.includeMemoPage = false;
+                syncFormInputs();
+                renderItemsForm();
+                updatePreview();
+                showNotification('フォームをクリアしました', 'success');
             }
 
             async function handleDownloadPDF() {
