@@ -1243,30 +1243,34 @@
 
             async function handleFileUpload(e) {
                 const file = e.target.files[0]; if (!file) return;
-                const reader = new FileReader();
-                reader.onload = function () {
-                    try {
-                        const text = new TextDecoder().decode(new Uint8Array(reader.result));
-                        const sM = '[START_FULL_DATA]', eM = '[END_FULL_DATA]';
-                        const si = text.lastIndexOf(sM), ei = text.lastIndexOf(eM);
-                        if (si !== -1 && ei !== -1) {
-                            const payload = JSON.parse(safeBase64Decode(text.substring(si + sM.length, ei)));
-                            if (payload.sourceCode) {
-                                sessionStorage.setItem(RECOVERY_KEY, JSON.stringify({ data: payload.data }));
-                                const blobUrl = URL.createObjectURL(new Blob([payload.sourceCode], { type: 'text/html' }));
-                                const newTab = window.open(blobUrl, '_blank');
-                                if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') { URL.revokeObjectURL(blobUrl); return; }
-                                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
-                                showNotification('別タブで復元しました', 'success');
-                            } else if (payload.data) {
-                                state = { ...state, ...payload.data };
-                                syncFormInputs(); renderItemsForm(); updatePreview();
-                                showNotification('データを復元しました', 'success');
-                            }
-                        } else { showNotification('復元用データが見つかりません', 'error'); }
-                    } catch (err) { console.error('Restore error:', err); showNotification('読み込みエラー', 'error'); }
-                };
-                reader.readAsArrayBuffer(file); e.target.value = '';
+                e.target.value = '';
+                try {
+                    const sM = '[START_FULL_DATA]', eM = '[END_FULL_DATA]';
+                    // 末尾 64KB だけをスキャン（全体をデコードするとフリーズするため）
+                    const TAIL = 65536;
+                    const offset = Math.max(0, file.size - TAIL);
+                    const tailBlob = file.slice(offset);
+                    const tailBuf = await tailBlob.arrayBuffer();
+                    const tail = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(tailBuf));
+                    const si = tail.lastIndexOf(sM), ei = tail.lastIndexOf(eM);
+                    if (si !== -1 && ei !== -1 && si < ei) {
+                        const payload = JSON.parse(safeBase64Decode(tail.substring(si + sM.length, ei)));
+                        if (payload.sourceCode) {
+                            sessionStorage.setItem(RECOVERY_KEY, JSON.stringify({ data: payload.data }));
+                            const blobUrl = URL.createObjectURL(new Blob([payload.sourceCode], { type: 'text/html' }));
+                            const newTab = window.open(blobUrl, '_blank');
+                            if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') { URL.revokeObjectURL(blobUrl); return; }
+                            setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+                            showNotification('別タブで復元しました', 'success');
+                        } else if (payload.data) {
+                            state = { ...state, ...payload.data };
+                            syncFormInputs(); renderItemsForm(); updatePreview();
+                            showNotification('データを復元しました', 'success');
+                        }
+                    } else {
+                        showNotification('このPDFにはアプリの保存データが含まれていません', 'error');
+                    }
+                } catch (err) { console.error('Restore error:', err); showNotification('読み込みエラー', 'error'); }
             }
 
             function showNotification(msg, type = 'success') {
