@@ -1244,33 +1244,46 @@
             async function handleFileUpload(e) {
                 const file = e.target.files[0]; if (!file) return;
                 e.target.value = '';
+                const sM = '[START_FULL_DATA]', eM = '[END_FULL_DATA]';
+
                 try {
-                    const sM = '[START_FULL_DATA]', eM = '[END_FULL_DATA]';
-                    // 末尾 64KB だけをスキャン（全体をデコードするとフリーズするため）
-                    const TAIL = 65536;
-                    const offset = Math.max(0, file.size - TAIL);
-                    const tailBlob = file.slice(offset);
-                    const tailBuf = await tailBlob.arrayBuffer();
-                    const tail = new TextDecoder('utf-8', { fatal: false }).decode(new Uint8Array(tailBuf));
-                    const si = tail.lastIndexOf(sM), ei = tail.lastIndexOf(eM);
-                    if (si !== -1 && ei !== -1 && si < ei) {
-                        const payload = JSON.parse(safeBase64Decode(tail.substring(si + sM.length, ei)));
-                        if (payload.sourceCode) {
-                            sessionStorage.setItem(RECOVERY_KEY, JSON.stringify({ data: payload.data }));
-                            const blobUrl = URL.createObjectURL(new Blob([payload.sourceCode], { type: 'text/html' }));
-                            const newTab = window.open(blobUrl, '_blank');
-                            if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') { URL.revokeObjectURL(blobUrl); return; }
-                            setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
-                            showNotification('別タブで復元しました', 'success');
-                        } else if (payload.data) {
-                            state = { ...state, ...payload.data };
-                            syncFormInputs(); renderItemsForm(); updatePreview();
-                            showNotification('データを復元しました', 'success');
-                        }
-                    } else {
+                    // ── Step1: 末尾512バイトで [END_FULL_DATA] の存在だけ確認 ──
+                    const STEP1 = 512;
+                    const s1Offset = Math.max(0, file.size - STEP1);
+                    const s1Text = new TextDecoder('utf-8', { fatal: false }).decode(
+                        new Uint8Array(await file.slice(s1Offset).arrayBuffer()));
+
+                    if (!s1Text.includes(eM)) {
                         showNotification('このPDFにはアプリの保存データが含まれていません', 'error');
+                        return;
                     }
-                } catch (err) { console.error('Restore error:', err); showNotification('読み込みエラー', 'error'); }
+
+                    // ── Step2: 末尾最大20MBを読んでフルデータを取得 ──
+                    const MAX_DATA = 20 * 1024 * 1024; // 20MB
+                    const s2Offset = Math.max(0, file.size - MAX_DATA);
+                    const s2Text = new TextDecoder('utf-8', { fatal: false }).decode(
+                        new Uint8Array(await file.slice(s2Offset).arrayBuffer()));
+
+                    const si = s2Text.lastIndexOf(sM), ei = s2Text.lastIndexOf(eM);
+                    if (si === -1 || ei === -1 || si >= ei) {
+                        showNotification('保存データの読み込みに失敗しました', 'error');
+                        return;
+                    }
+
+                    const payload = JSON.parse(safeBase64Decode(s2Text.substring(si + sM.length, ei)));
+                    if (payload.sourceCode) {
+                        sessionStorage.setItem(RECOVERY_KEY, JSON.stringify({ data: payload.data }));
+                        const blobUrl = URL.createObjectURL(new Blob([payload.sourceCode], { type: 'text/html' }));
+                        const newTab = window.open(blobUrl, '_blank');
+                        if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') { URL.revokeObjectURL(blobUrl); return; }
+                        setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+                        showNotification('別タブで復元しました', 'success');
+                    } else if (payload.data) {
+                        state = { ...state, ...payload.data };
+                        syncFormInputs(); renderItemsForm(); updatePreview();
+                        showNotification('データを復元しました', 'success');
+                    }
+                } catch (err) { console.error('Restore error:', err); showNotification('読み込みエラー: ' + err.message, 'error'); }
             }
 
             function showNotification(msg, type = 'success') {
