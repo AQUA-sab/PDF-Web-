@@ -505,6 +505,109 @@
             background: #1A73E8;
             flex-shrink: 0;
         }
+
+        /* ====== テキストスタイルパネル ====== */
+        .style-panel {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-top: 4px;
+        }
+
+        .style-panel-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.05em;
+            user-select: none;
+            padding: 2px 0;
+        }
+
+        .style-panel-toggle:hover {
+            color: #1A73E8;
+        }
+
+        .style-panel-toggle .toggle-arrow {
+            transition: transform 0.2s;
+            font-size: 9px;
+        }
+
+        .style-panel-toggle.open .toggle-arrow {
+            transform: rotate(90deg);
+        }
+
+        .style-panel-body {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            padding-top: 8px;
+        }
+
+        .style-panel-body.open {
+            display: flex;
+        }
+
+        .style-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .style-label {
+            font-size: 9px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            width: 28px;
+            flex-shrink: 0;
+        }
+
+        .style-btn-group {
+            display: flex;
+            gap: 2px;
+            flex-wrap: wrap;
+        }
+
+        .style-btn {
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            background: #fff;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.1s;
+            white-space: nowrap;
+        }
+
+        .style-btn:hover {
+            border-color: #1A73E8;
+            color: #1A73E8;
+        }
+
+        .style-btn.active {
+            background: #1A73E8;
+            border-color: #1A73E8;
+            color: #fff;
+        }
+
+        .style-color-input {
+            width: 28px;
+            height: 22px;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            padding: 1px;
+            cursor: pointer;
+            background: none;
+        }
     </style>
 </head>
 
@@ -614,11 +717,18 @@
                         <span class="section-label-dot"></span>
                         基本情報
                     </h3>
-                    <div class="input-group"><label class="label-text">タイトル</label><input type="text" data-field="title"
+                    <div class="input-group">
+                        <label class="label-text">タイトル</label>
+                        <input type="text" data-field="title"
                             class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg font-bold text-slate-800">
+                        <div id="title-style-panel"></div>
                     </div>
-                    <div class="input-group"><label class="label-text">日付</label><input type="text" data-field="date"
-                            class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg"></div>
+                    <div class="input-group">
+                        <label class="label-text">日付</label>
+                        <input type="text" data-field="date"
+                            class="field-input w-full p-2 bg-slate-50 border border-slate-100 rounded-lg">
+                        <div id="date-style-panel"></div>
+                    </div>
                 </section>
 
                 <!-- アジェンダ項目 -->
@@ -674,19 +784,39 @@
             function safeBase64Encode(str) { return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1))); }
             function safeBase64Decode(str) { return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); }
 
+            // デフォルトスタイルの雛形
+            const DEFAULT_TITLE_STYLE = { font: 'sans', color: '#1e293b', size: '2xl', weight: '900' };
+            const DEFAULT_DATE_STYLE = { font: 'sans', color: '#475569', size: 'sm', weight: '400' };
+            const DEFAULT_HEADING_STYLE = { font: 'sans', color: '#1e293b', size: 'base', weight: '700' };
+            const DEFAULT_CONTENT_STYLE = { font: 'sans', color: '#475569', size: 'sm', weight: '400' };
+
+            const SIZE_MAP = { 'xs': '12px', 'sm': '14px', 'base': '16px', 'lg': '18px', 'xl': '20px', '2xl': '24px', '3xl': '30px' };
+            const FONT_MAP = { 'sans': "'Noto Sans JP', sans-serif", 'serif': "'Noto Serif JP', serif" };
+
             let state = {
                 title: "月例開発チームミーティング アジェンダ",
                 date: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }),
                 includeMemoPage: false,
+                titleStyle: { ...DEFAULT_TITLE_STYLE },
+                dateStyle: { ...DEFAULT_DATE_STYLE },
                 items: [
-                    { heading: "前回の振り返り", content: "・新機能リリースの反響\n・発生した不具合の対応状況", memoLines: 3 },
-                    { heading: "今月の目標共有", content: "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", memoLines: 4 },
-                    { heading: "各担当からの進捗報告", content: "", memoLines: 6 }
+                    {
+                        heading: "前回の振り返り", content: "・新機能リリースの反響\n・発生した不具合の対応状況", memoLines: 3,
+                        headingStyle: { ...DEFAULT_HEADING_STYLE }, contentStyle: { ...DEFAULT_CONTENT_STYLE }
+                    },
+                    {
+                        heading: "今月の目標共有", content: "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", memoLines: 4,
+                        headingStyle: { ...DEFAULT_HEADING_STYLE }, contentStyle: { ...DEFAULT_CONTENT_STYLE }
+                    },
+                    {
+                        heading: "各担当からの進捗報告", content: "", memoLines: 6,
+                        headingStyle: { ...DEFAULT_HEADING_STYLE }, contentStyle: { ...DEFAULT_CONTENT_STYLE }
+                    }
                 ],
                 images: []
             };
 
-            /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = { "title": "月例開発チームミーティング アジェンダ", "date": "2026年2月26日", "includeMemoPage": false, "items": [{ "heading": "前回の振り返り", "content": "・新機能リリースの反響\n・発生した不具合の対応状況", "memoLines": 3 }, { "heading": "今月の目標共有", "content": "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", "memoLines": 4 }, { "heading": "各担当からの進捗報告", "content": "", "memoLines": 6 }], "images": [] }; /* __INJECTED_DATA_END__ */
+            /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = { "title": "月例開発チームミーティング アジェンダ", "date": "2026年2月26日", "includeMemoPage": false, "titleStyle": { "font": "sans", "color": "#1e293b", "size": "2xl", "weight": "900" }, "dateStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" }, "items": [{ "heading": "前回の振り返り", "content": "・新機能リリースの反響\n・発生した不具合の対応状況", "memoLines": 3, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }, { "heading": "今月の目標共有", "content": "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", "memoLines": 4, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }, { "heading": "各担当からの進捗報告", "content": "", "memoLines": 6, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }], "images": [] }; /* __INJECTED_DATA_END__ */
 
             const PAGE_SIZES = {
                 A4: { w: 794, h: 1123, label: 'A4', pdf: 'a4', orient: 'p', mmW: 210, mmH: 297 }
@@ -702,6 +832,13 @@
                 } else if (typeof __EMBEDDED_DATA__ !== 'undefined') {
                     state = { ...state, ...__EMBEDDED_DATA__ };
                 }
+                // スタイルの欠損補完（旧データ互換）
+                if (!state.titleStyle) state.titleStyle = { ...DEFAULT_TITLE_STYLE };
+                if (!state.dateStyle) state.dateStyle = { ...DEFAULT_DATE_STYLE };
+                state.items.forEach(item => {
+                    if (!item.headingStyle) item.headingStyle = { ...DEFAULT_HEADING_STYLE };
+                    if (!item.contentStyle) item.contentStyle = { ...DEFAULT_CONTENT_STYLE };
+                });
 
                 attachEventListeners();
                 initImageEvents();
@@ -709,6 +846,7 @@
                 syncFormInputs();
                 renderItemsForm();
                 updatePreview();
+                renderStylePanels();
                 setTimeout(fitToScreen, 200);
             }
 
@@ -1040,23 +1178,145 @@
                 // lucide不要（ボタンはCSSデコレーターで表示）
             }
 
+            // ====== スタイルパネルHTML生成ヘルパー ======
+            function buildStylePanelHTML(id, styleObj, opts = {}) {
+                const { showFont = true, label = 'テキストスタイル' } = opts;
+                const sizeOptions = [
+                    { v: 'xs', t: '極小' }, { v: 'sm', t: '小' }, { v: 'base', t: '標準' },
+                    { v: 'lg', t: '大' }, { v: 'xl', t: '特大' }, { v: '2xl', t: '極大' }
+                ];
+                const weightOptions = [
+                    { v: '300', t: '細' }, { v: '400', t: '普通' }, { v: '500', t: '中' },
+                    { v: '700', t: '太' }, { v: '900', t: '極太' }
+                ];
+                const fontOptions = [{ v: 'sans', t: 'ゴ体' }, { v: 'serif', t: '明朝' }];
+
+                const sizeBtns = sizeOptions.map(o =>
+                    `<button class="style-btn${styleObj.size === o.v ? ' active' : ''}" data-panel="${id}" data-prop="size" data-val="${o.v}">${o.t}</button>`
+                ).join('');
+                const weightBtns = weightOptions.map(o =>
+                    `<button class="style-btn${styleObj.weight === o.v ? ' active' : ''}" data-panel="${id}" data-prop="weight" data-val="${o.v}">${o.t}</button>`
+                ).join('');
+                const fontBtns = !showFont ? '' : fontOptions.map(o =>
+                    `<button class="style-btn${styleObj.font === o.v ? ' active' : ''}" data-panel="${id}" data-prop="font" data-val="${o.v}">${o.t}</button>`
+                ).join('');
+
+                return `<div class="style-panel" data-panel-id="${id}">
+                    <div class="style-panel-toggle" data-panel-toggle="${id}">
+                        <span class="toggle-arrow">▶</span>
+                        <span>✦ ${label}</span>
+                    </div>
+                    <div class="style-panel-body" data-panel-body="${id}">
+                        <div class="style-row">
+                            <span class="style-label">色</span>
+                            <input type="color" class="style-color-input" data-panel="${id}" data-prop="color" value="${styleObj.color}">
+                            <span style="font-size:10px;color:#94a3b8;">${styleObj.color}</span>
+                        </div>
+                        <div class="style-row">
+                            <span class="style-label">サイズ</span>
+                            <div class="style-btn-group">${sizeBtns}</div>
+                        </div>
+                        <div class="style-row">
+                            <span class="style-label">太さ</span>
+                            <div class="style-btn-group">${weightBtns}</div>
+                        </div>
+                        ${showFont ? `<div class="style-row"><span class="style-label">書体</span><div class="style-btn-group">${fontBtns}</div></div>` : ''}
+                    </div>
+                </div>`;
+            }
+
+            // ====== スタイルパネルのイベント委任 ======
+            function attachStylePanelEvents(container) {
+                container.querySelectorAll('[data-panel-toggle]').forEach(toggle => {
+                    toggle.addEventListener('click', () => {
+                        const id = toggle.dataset.panelToggle;
+                        const body = container.querySelector(`[data-panel-body="${id}"]`);
+                        if (body) {
+                            body.classList.toggle('open');
+                            toggle.classList.toggle('open');
+                        }
+                    });
+                });
+                container.querySelectorAll('.style-btn[data-panel]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const { panel, prop, val } = btn.dataset;
+                        applyStyleChange(panel, prop, val);
+                    });
+                });
+                container.querySelectorAll('.style-color-input[data-panel]').forEach(input => {
+                    input.addEventListener('input', () => {
+                        const { panel, prop } = input.dataset;
+                        // 隣のspan更新
+                        const span = input.nextElementSibling;
+                        if (span) span.textContent = input.value;
+                        applyStyleChange(panel, prop, input.value);
+                    });
+                });
+            }
+
+            // ====== スタイル変更の適用 ======
+            function applyStyleChange(panelId, prop, val) {
+                if (panelId === 'title') {
+                    state.titleStyle[prop] = val;
+                } else if (panelId === 'date') {
+                    state.dateStyle[prop] = val;
+                } else if (panelId.startsWith('heading_')) {
+                    const idx = parseInt(panelId.split('_')[1]);
+                    if (state.items[idx]) state.items[idx].headingStyle[prop] = val;
+                } else if (panelId.startsWith('content_')) {
+                    const idx = parseInt(panelId.split('_')[1]);
+                    if (state.items[idx]) state.items[idx].contentStyle[prop] = val;
+                }
+                // アクティブボタンを更新
+                document.querySelectorAll(`[data-panel="${panelId}"][data-prop="${prop}"]`).forEach(el => {
+                    if (el.tagName === 'BUTTON') {
+                        el.classList.toggle('active', el.dataset.val === val);
+                    }
+                });
+                updatePreview();
+            }
+
+            // ====== タイトル・日付スタイルパネルを描画 ======
+            function renderStylePanels() {
+                const tp = document.getElementById('title-style-panel');
+                if (tp) {
+                    tp.innerHTML = buildStylePanelHTML('title', state.titleStyle, { label: 'タイトルスタイル' });
+                    attachStylePanelEvents(tp);
+                }
+                const dp = document.getElementById('date-style-panel');
+                if (dp) {
+                    dp.innerHTML = buildStylePanelHTML('date', state.dateStyle, { label: '日付スタイル', showFont: false });
+                    attachStylePanelEvents(dp);
+                }
+            }
+
             function renderItemsForm() {
                 const c = document.getElementById('items-container');
                 c.innerHTML = '';
                 state.items.forEach((item, i) => {
+                    if (!item.headingStyle) item.headingStyle = { ...DEFAULT_HEADING_STYLE };
+                    if (!item.contentStyle) item.contentStyle = { ...DEFAULT_CONTENT_STYLE };
+
                     const row = document.createElement('div');
                     row.className = 'bg-slate-50 border border-slate-100 p-3 rounded-lg flex flex-col gap-2 relative group';
+
+                    const headingPanelHTML = buildStylePanelHTML(`heading_${i}`, item.headingStyle, { label: '見出しスタイル' });
+                    const contentPanelHTML = buildStylePanelHTML(`content_${i}`, item.contentStyle, { label: '本文スタイル', showFont: false });
+
                     row.innerHTML = `
                         <div class="flex items-center gap-2">
-                            <input type="text" placeholder="見出し (例: 進捗報告)" value="${item.heading}" class="item-field flex-1 p-2 bg-white border border-slate-200 rounded font-bold" data-idx="${i}" data-key="heading">
+                            <input type="text" placeholder="見出し (例: 進捗報告)" value="${item.heading.replace(/"/g, '&quot;')}" class="item-field flex-1 p-2 bg-white border border-slate-200 rounded font-bold" data-idx="${i}" data-key="heading">
                             <button class="btn-del-item flex-shrink-0 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" data-idx="${i}" title="削除"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
+                        ${headingPanelHTML}
                         <textarea placeholder="内容（任意）" class="item-field w-full p-2 bg-white border border-slate-200 rounded leading-relaxed resize-none h-16" data-idx="${i}" data-key="content">${item.content}</textarea>
+                        ${contentPanelHTML}
                         <div class="flex items-center gap-2 mt-1">
                             <span class="text-[10px] text-slate-500 font-bold">協議メモ欄の行数:</span>
                             <input type="number" min="0" max="20" value="${item.memoLines}" class="item-field w-16 p-1 text-center border border-slate-200 rounded" data-idx="${i}" data-key="memoLines">
                         </div>`;
                     c.appendChild(row);
+                    attachStylePanelEvents(row);
                 });
 
                 c.querySelectorAll('.item-field').forEach(el => {
@@ -1085,26 +1345,47 @@
 
             function updatePreviewField(field) { document.querySelectorAll(`[data-view="${field}"]`).forEach(el => el.innerText = state[field]); }
 
+            function applyStyleToEl(el, styleObj) {
+                if (!el || !styleObj) return;
+                el.style.color = styleObj.color || '';
+                el.style.fontSize = SIZE_MAP[styleObj.size] || '';
+                el.style.fontWeight = styleObj.weight || '';
+                el.style.fontFamily = FONT_MAP[styleObj.font] || '';
+            }
+
             function updatePreview() {
-                Object.keys(state).forEach(k => { if (k !== 'items' && k !== 'images') updatePreviewField(k); });
+                Object.keys(state).forEach(k => { if (k !== 'items' && k !== 'images' && k !== 'titleStyle' && k !== 'dateStyle') updatePreviewField(k); });
+
+                // タイトル・日付スタイル反映
+                document.querySelectorAll('[data-view="title"]').forEach(el => applyStyleToEl(el, state.titleStyle));
+                document.querySelectorAll('[data-view="date"]').forEach(el => applyStyleToEl(el, state.dateStyle));
 
                 const flowArea = document.querySelector('[data-flow-area]');
                 if (flowArea) {
                     flowArea.innerHTML = '';
                     state.items.forEach((item, i) => {
+                        if (!item.headingStyle) item.headingStyle = { ...DEFAULT_HEADING_STYLE };
+                        if (!item.contentStyle) item.contentStyle = { ...DEFAULT_CONTENT_STYLE };
+
                         const block = document.createElement('div');
                         block.className = 'flow-block';
                         const memoHtml = item.memoLines > 0 ? `
                             <div class="mt-4 flex flex-col gap-0 border-t border-slate-300">
                                 ${Array(item.memoLines).fill('<div class="h-8 border-b border-slate-300 border-dashed"></div>').join('')}
                             </div>` : '';
+
+                        const hs = item.headingStyle;
+                        const cs = item.contentStyle;
+                        const headingInlineStyle = `color:${hs.color};font-size:${SIZE_MAP[hs.size]};font-weight:${hs.weight};font-family:${FONT_MAP[hs.font]};border-left-color:${hs.color};`;
+                        const contentInlineStyle = cs ? `color:${cs.color};font-size:${SIZE_MAP[cs.size]};font-weight:${cs.weight};font-family:${FONT_MAP[cs.font]};` : '';
+
                         block.innerHTML = `
                             <div class="density-pad">
-                                <h2 class="text-base font-bold text-slate-800 border-l-[3px] border-slate-800 pl-3 mb-3 flex items-center gap-2">
-                                    <span class="bg-slate-800 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0">${i + 1}</span>
+                                <h2 class="border-l-[3px] pl-3 mb-3 flex items-center gap-2" style="${headingInlineStyle}">
+                                    <span class="text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0" style="background:${hs.color};">${i + 1}</span>
                                     ${item.heading || '未入力'}
                                 </h2>
-                                ${item.content ? `<div class="text-sm text-slate-600 leading-[1.8] whitespace-pre-wrap pl-5">${item.content}</div>` : ''}
+                                ${item.content ? `<div class="leading-[1.8] whitespace-pre-wrap pl-5" style="${contentInlineStyle}">${item.content}</div>` : ''}
                                 ${memoHtml}
                             </div>`;
                         flowArea.appendChild(block);
@@ -1346,9 +1627,12 @@
                 state.items = [];
                 state.images = [];
                 state.includeMemoPage = false;
+                state.titleStyle = { ...DEFAULT_TITLE_STYLE };
+                state.dateStyle = { ...DEFAULT_DATE_STYLE };
                 syncFormInputs();
                 renderItemsForm();
                 updatePreview();
+                renderStylePanels();
                 showNotification('フォームをクリアしました', 'success');
             }
 
@@ -1429,9 +1713,17 @@
                     // ── 現在タブに必ずデータを反映（sourceCode有無に関わらず） ──
                     if (payload.data) {
                         state = { ...state, ...payload.data };
+                        // スタイルの欠損補完（旧データ互換）
+                        if (!state.titleStyle) state.titleStyle = { ...DEFAULT_TITLE_STYLE };
+                        if (!state.dateStyle) state.dateStyle = { ...DEFAULT_DATE_STYLE };
+                        state.items.forEach(item => {
+                            if (!item.headingStyle) item.headingStyle = { ...DEFAULT_HEADING_STYLE };
+                            if (!item.contentStyle) item.contentStyle = { ...DEFAULT_CONTENT_STYLE };
+                        });
                         syncFormInputs();
                         renderItemsForm();
                         updatePreview();
+                        renderStylePanels();
                     }
 
                     showNotification('データを復元しました', 'success');
