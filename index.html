@@ -15,7 +15,7 @@
     <meta name="apple-mobile-web-app-title" content="会議アジェンダ">
 
     <link rel="stylesheet" crossorigin="anonymous"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@400;700;900&display=swap">
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Serif+JP:wght@300;400;700;900&family=M+PLUS+Rounded+1c:wght@400;700;900&family=Kosugi+Maru&family=Sawarabi+Mincho&display=swap">
 
     <script src="https://cdn.tailwindcss.com/3.4.16"></script>
     <script src="https://unpkg.com/lucide@0.344.0" crossorigin="anonymous"></script>
@@ -483,7 +483,92 @@
             transform: scale(0.96) !important;
         }
 
-        /* ====== セクションヘッダー改善 ====== */
+        /* ====== フローティングスタイルパネル（プレビュークリック時） ====== */
+        #floating-style-editor {
+            position: fixed;
+            z-index: 9000;
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.10);
+            padding: 14px 16px;
+            min-width: 280px;
+            max-width: 320px;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #e2e8f0;
+        }
+
+        #floating-style-editor.visible {
+            display: flex;
+        }
+
+        #floating-style-editor .fse-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 900;
+            color: #1e293b;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 8px;
+        }
+
+        #floating-style-editor .fse-close {
+            cursor: pointer;
+            color: #94a3b8;
+            font-size: 16px;
+            line-height: 1;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: color 0.1s, background 0.1s;
+        }
+
+        #floating-style-editor .fse-close:hover {
+            color: #ef4444;
+            background: #fef2f2;
+        }
+
+        /* 回転スライダー */
+        .rotate-slider-wrap {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-top: 4px;
+        }
+
+        .rotate-slider-wrap.visible {
+            display: flex;
+        }
+
+        .rotate-slider-wrap label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+        .rotate-slider-wrap input[type=range] {
+            flex: 1;
+            height: 4px;
+            cursor: pointer;
+            accent-color: #1A73E8;
+            font-size: 16px !important;
+        }
+
+        .rotate-slider-wrap .rotate-val {
+            font-size: 10px;
+            font-weight: 700;
+            color: #1A73E8;
+            min-width: 36px;
+            text-align: right;
+        }
+
         .section-label {
             display: flex;
             align-items: center;
@@ -658,8 +743,8 @@
                                     <div class="flex justify-end mb-4 text-sm text-slate-600">
                                         <span data-view="date" class="whitespace-nowrap">2026年2月26日</span>
                                     </div>
-                                    <h1 class="text-center text-2xl font-black tracking-widest text-slate-800 border-b-2 border-slate-800 pb-3 mb-2"
-                                        data-view="title">月例開発チームミーティング アジェンダ</h1>
+                                    <h1 class="tracking-widest border-b-2 pb-3 mb-2" data-view="title"
+                                        data-clickable-style="title" style="cursor:pointer;">月例開発チームミーティング アジェンダ</h1>
                                 </div>
                                 <div data-flow-area class="flex-grow flex flex-col gap-6 pt-2 density-gap"></div>
                             </div>
@@ -785,13 +870,35 @@
             function safeBase64Decode(str) { return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')); }
 
             // デフォルトスタイルの雛形
-            const DEFAULT_TITLE_STYLE = { font: 'sans', color: '#1e293b', size: '2xl', weight: '900' };
-            const DEFAULT_DATE_STYLE = { font: 'sans', color: '#475569', size: 'sm', weight: '400' };
-            const DEFAULT_HEADING_STYLE = { font: 'sans', color: '#1e293b', size: 'base', weight: '700' };
-            const DEFAULT_CONTENT_STYLE = { font: 'sans', color: '#475569', size: 'sm', weight: '400' };
+            const DEFAULT_TITLE_STYLE = { font: 'sans', color: '#1e293b', size: '2xl', weight: '900', align: 'center' };
+            const DEFAULT_DATE_STYLE = { font: 'sans', color: '#475569', size: 'sm', weight: '400', align: 'right' };
+            const DEFAULT_HEADING_STYLE = { font: 'sans', color: '#1e293b', size: 'base', weight: '700', align: 'left' };
+            const DEFAULT_CONTENT_STYLE = { font: 'sans', color: '#475569', size: 'sm', weight: '400', align: 'left' };
 
             const SIZE_MAP = { 'xs': '12px', 'sm': '14px', 'base': '16px', 'lg': '18px', 'xl': '20px', '2xl': '24px', '3xl': '30px' };
-            const FONT_MAP = { 'sans': "'Noto Sans JP', sans-serif", 'serif': "'Noto Serif JP', serif" };
+            const FONT_MAP = {
+                'sans': "'Noto Sans JP', sans-serif",
+                'serif': "'Noto Serif JP', serif",
+                'meiryo': "'Meiryo UI', Meiryo, 'MS PGothic', sans-serif",
+                'rounded': "'M PLUS Rounded 1c', 'Noto Sans JP', sans-serif",
+                'kosugi': "'Kosugi Maru', 'M PLUS Rounded 1c', sans-serif",
+                'mincho': "'Sawarabi Mincho', 'Noto Serif JP', serif",
+                'gothic': "'MS Gothic', 'MS PGothic', 'Noto Sans JP', monospace"
+            };
+            const FONT_LABEL = {
+                'sans': 'Noto Sans',
+                'serif': 'Noto Serif',
+                'meiryo': 'メイリオ',
+                'rounded': '丸ゴシック',
+                'kosugi': '小杉丸ゴシ',
+                'mincho': 'さわらび明朝',
+                'gothic': 'MSゴシック'
+            };
+            const ALIGN_BTNS = [
+                { v: 'left', t: '左', icon: '≡◄' },
+                { v: 'center', t: '中', icon: '☰' },
+                { v: 'right', t: '右', icon: '►≡' }
+            ];
 
             let state = {
                 title: "月例開発チームミーティング アジェンダ",
@@ -843,6 +950,7 @@
                 attachEventListeners();
                 initImageEvents();
                 initSplitter();      // ★ スプリッターの初期化
+                initPreviewClickEdit(); // ★ プレビュークリック編集
                 syncFormInputs();
                 renderItemsForm();
                 updatePreview();
@@ -1150,21 +1258,37 @@
                     wrapper.addEventListener('touchstart', onWrapperStart, { passive: false });
                     wrapper.addEventListener('mousedown', onWrapperStart);
 
-                    // ★ 回転ボタン — 直接イベント登録
+                    // ★ 回転ボタン — クリックでスライダーコントロールをトグル
                     const rotateBtn = document.createElement('div');
                     rotateBtn.className = 'rotate-btn-img';
+
+                    // スライダーラッパー（初期非表示）
+                    const sliderWrap = document.createElement('div');
+                    sliderWrap.className = 'rotate-slider-wrap';
+                    sliderWrap.innerHTML = `
+                        <label >回転角</label>
+                        <input type="range" min="-180" max="180" step="1" value="${imgData.rotation || 0}" class="img-rotate-slider">
+                        <span class="rotate-val">${imgData.rotation || 0}°</span>
+                    `;
+                    const slider = sliderWrap.querySelector('.img-rotate-slider');
+                    const rotateVal = sliderWrap.querySelector('.rotate-val');
+                    slider.addEventListener('input', () => {
+                        const deg = parseInt(slider.value);
+                        rotateVal.textContent = deg + '°';
+                        imgData.rotation = deg;
+                        img.style.transform = `rotate(${deg}deg)`;
+                    });
+                    slider.addEventListener('change', () => {
+                        updatePreview();
+                    });
+
                     function doRotate(e) {
                         e.stopPropagation();
                         if (e.cancelable) e.preventDefault();
                         isImgDragging = false; isImgResizing = false; currentActiveImg = null;
                         selectedImageId = imgData.id;
-                        imgData.rotation = ((imgData.rotation || 0) + 90) % 360;
-                        // 幅・高さを入れ替え（90°回転のたびに縦横比を反転）
-                        const oldW = imgData.width;
-                        const oldH = imgData.height;
-                        imgData.width = oldH;
-                        imgData.height = oldW;
-                        updatePreview();
+                        // スライダーの表示/非表示トグル
+                        sliderWrap.classList.toggle('visible');
                     }
                     rotateBtn.addEventListener('touchstart', doRotate, { passive: false });
                     rotateBtn.addEventListener('mousedown', doRotate);
@@ -1174,13 +1298,65 @@
                     wrapper.appendChild(deleteBtn);
                     wrapper.appendChild(rotateBtn);
                     imgLayer.appendChild(wrapper);
+                    // スライダーは画像wrapperの親の直后に追加（img-layerの外側に出せないため『pdf-pageに追加）
+                    // 同じ pdf-page 内に position:absolute で配置
+                    sliderWrap.style.cssText = `position:absolute;bottom:0;left:0;right:0;z-index:50;margin:0 8px 8px;`;
+                    targetPage.appendChild(sliderWrap);
+                    // スライダーが表示中に選択画像が切り替わったら非表示
+                    wrapper.addEventListener('mousedown', () => sliderWrap.classList.remove('visible'));
+                    wrapper.addEventListener('touchstart', () => sliderWrap.classList.remove('visible'), { passive: true });
                 });
                 // lucide不要（ボタンはCSSデコレーターで表示）
             }
 
-            // ====== スタイルパネルHTML生成ヘルパー ======
-            function buildStylePanelHTML(id, styleObj, opts = {}) {
-                const { showFont = true, label = 'テキストスタイル' } = opts;
+            // ====== プレビュークリック/タッチでスタイル編集パネルを表示 ======
+            let _fseCurrentTarget = null;
+
+            function initFloatingStyleEditor() {
+                // フローティングパネル DOMを発行
+                if (document.getElementById('floating-style-editor')) return;
+                const panel = document.createElement('div');
+                panel.id = 'floating-style-editor';
+                panel.innerHTML = `
+                    <div class="fse-header">
+                        <span id="fse-title">スタイル編集</span>
+                        <span class="fse-close" id="fse-close">✕</span>
+                    </div>
+                    <div id="fse-body"></div>`;
+                document.body.appendChild(panel);
+                document.getElementById('fse-close').addEventListener('click', closeFloatingEditor);
+                document.addEventListener('click', (e) => {
+                    if (!panel.contains(e.target) && !e.target.closest('[data-clickable-style]')) {
+                        closeFloatingEditor();
+                    }
+                });
+                document.addEventListener('touchstart', (e) => {
+                    if (!panel.contains(e.target) && !e.target.closest('[data-clickable-style]')) {
+                        closeFloatingEditor();
+                    }
+                }, { passive: true });
+            }
+
+            function openFloatingEditor(panelId, label, styleObj, anchorEl) {
+                initFloatingStyleEditor();
+                _fseCurrentTarget = panelId;
+                const showFont = (panelId === 'title' || panelId.startsWith('heading_'));
+                const showAlign = (panelId === 'title' || panelId === 'date' || panelId.startsWith('heading_') || panelId.startsWith('content_'));
+                const body = document.getElementById('fse-body');
+                document.getElementById('fse-title').textContent = label + ' スタイル編集';
+                body.innerHTML = buildStylePanelInner(panelId, styleObj, { showFont, showAlign });
+                attachStylePanelEvents(body);
+                // パネルを開く
+                const sBody = body.querySelector('[data-panel-body]');
+                if (sBody) sBody.classList.add('open');
+
+                const panel = document.getElementById('floating-style-editor');
+                panel.classList.add('visible');
+                positionFloatingEditor(anchorEl);
+            }
+
+            function buildStylePanelInner(id, styleObj, opts = {}) {
+                const { showFont = true, showAlign = false } = opts;
                 const sizeOptions = [
                     { v: 'xs', t: '極小' }, { v: 'sm', t: '小' }, { v: 'base', t: '標準' },
                     { v: 'lg', t: '大' }, { v: 'xl', t: '特大' }, { v: '2xl', t: '極大' }
@@ -1189,7 +1365,94 @@
                     { v: '300', t: '細' }, { v: '400', t: '普通' }, { v: '500', t: '中' },
                     { v: '700', t: '太' }, { v: '900', t: '極太' }
                 ];
-                const fontOptions = [{ v: 'sans', t: 'ゴ体' }, { v: 'serif', t: '明朝' }];
+                const sizeBtns = sizeOptions.map(o =>
+                    `<button class="style-btn${styleObj.size === o.v ? ' active' : ''}" data-panel="${id}" data-prop="size" data-val="${o.v}">${o.t}</button>`
+                ).join('');
+                const weightBtns = weightOptions.map(o =>
+                    `<button class="style-btn${styleObj.weight === o.v ? ' active' : ''}" data-panel="${id}" data-prop="weight" data-val="${o.v}">${o.t}</button>`
+                ).join('');
+                const fontBtns = !showFont ? '' : Object.entries(FONT_LABEL).map(([v, t]) =>
+                    `<button class="style-btn${styleObj.font === v ? ' active' : ''}" data-panel="${id}" data-prop="font" data-val="${v}">${t}</button>`
+                ).join('');
+                const alignBtns = !showAlign ? '' : ALIGN_BTNS.map(o =>
+                    `<button class="style-btn${(styleObj.align || 'left') === o.v ? ' active' : ''}" data-panel="${id}" data-prop="align" data-val="${o.v}" title="${o.t}">${o.icon}</button>`
+                ).join('');
+                return `<div class="style-panel-body open" data-panel-body="${id}" style="padding-top:0;">
+                    <div class="style-row">
+                        <span class="style-label">色</span>
+                        <input type="color" class="style-color-input" data-panel="${id}" data-prop="color" value="${styleObj.color}">
+                        <span style="font-size:10px;color:#94a3b8;">${styleObj.color}</span>
+                    </div>
+                    <div class="style-row"><span class="style-label">サイズ</span><div class="style-btn-group">${sizeBtns}</div></div>
+                    <div class="style-row"><span class="style-label">太さ</span><div class="style-btn-group">${weightBtns}</div></div>
+                    ${showFont ? `<div class="style-row"><span class="style-label">書体</span><div class="style-btn-group">${fontBtns}</div></div>` : ''}
+                    ${showAlign ? `<div class="style-row"><span class="style-label">揃え</span><div class="style-btn-group">${alignBtns}</div></div>` : ''}
+                </div>`;
+            }
+
+            function positionFloatingEditor(anchorEl) {
+                const panel = document.getElementById('floating-style-editor');
+                if (!panel || !anchorEl) return;
+                const rect = anchorEl.getBoundingClientRect();
+                let top = rect.bottom + 8;
+                let left = rect.left;
+                // 画面はみ出し辺処理
+                const pw = panel.offsetWidth || 300;
+                const ph = panel.offsetHeight || 200;
+                if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+                if (left < 8) left = 8;
+                if (top + ph > window.innerHeight - 8) top = rect.top - ph - 8;
+                panel.style.left = left + 'px';
+                panel.style.top = top + 'px';
+            }
+
+            function closeFloatingEditor() {
+                const panel = document.getElementById('floating-style-editor');
+                if (panel) panel.classList.remove('visible');
+                _fseCurrentTarget = null;
+            }
+
+            // プレビュー内のクリックエベントをスコープ外で初期化
+            function initPreviewClickEdit() {
+                const pc = document.getElementById('preview-container');
+                function handlePreviewClick(e) {
+                    const target = e.target.closest('[data-clickable-style]');
+                    if (!target) return;
+                    e.stopPropagation();
+                    if (e.cancelable) e.preventDefault();
+                    const panelId = target.dataset.clickableStyle;
+                    let styleObj, label;
+                    if (panelId === 'title') {
+                        styleObj = state.titleStyle; label = 'タイトル';
+                    } else if (panelId === 'date') {
+                        styleObj = state.dateStyle; label = '日付';
+                    } else if (panelId.startsWith('heading_')) {
+                        const idx = parseInt(panelId.split('_')[1]);
+                        styleObj = state.items[idx]?.headingStyle; label = `見出し${idx + 1}`;
+                    } else if (panelId.startsWith('content_')) {
+                        const idx = parseInt(panelId.split('_')[1]);
+                        styleObj = state.items[idx]?.contentStyle; label = `本文${idx + 1}`;
+                    }
+                    if (!styleObj) return;
+                    openFloatingEditor(panelId, label, styleObj, target);
+                }
+                pc.addEventListener('click', handlePreviewClick);
+                pc.addEventListener('touchend', (e) => {
+                    if (e.changedTouches.length === 1) handlePreviewClick(e.changedTouches[0] ? { target: e.target, stopPropagation: () => { }, preventDefault: () => { }, cancelable: e.cancelable } : e);
+                }, { passive: false });
+            }
+
+            // ====== スタイルパネルHTML生成ヘルパー ======
+            function buildStylePanelHTML(id, styleObj, opts = {}) {
+                const { showFont = true, showAlign = false, label = 'テキストスタイル' } = opts;
+                const sizeOptions = [
+                    { v: 'xs', t: '極小' }, { v: 'sm', t: '小' }, { v: 'base', t: '標準' },
+                    { v: 'lg', t: '大' }, { v: 'xl', t: '特大' }, { v: '2xl', t: '極大' }
+                ];
+                const weightOptions = [
+                    { v: '300', t: '細' }, { v: '400', t: '普通' }, { v: '500', t: '中' },
+                    { v: '700', t: '太' }, { v: '900', t: '極太' }
+                ];
 
                 const sizeBtns = sizeOptions.map(o =>
                     `<button class="style-btn${styleObj.size === o.v ? ' active' : ''}" data-panel="${id}" data-prop="size" data-val="${o.v}">${o.t}</button>`
@@ -1197,8 +1460,11 @@
                 const weightBtns = weightOptions.map(o =>
                     `<button class="style-btn${styleObj.weight === o.v ? ' active' : ''}" data-panel="${id}" data-prop="weight" data-val="${o.v}">${o.t}</button>`
                 ).join('');
-                const fontBtns = !showFont ? '' : fontOptions.map(o =>
-                    `<button class="style-btn${styleObj.font === o.v ? ' active' : ''}" data-panel="${id}" data-prop="font" data-val="${o.v}">${o.t}</button>`
+                const fontBtns = !showFont ? '' : Object.entries(FONT_LABEL).map(([v, t]) =>
+                    `<button class="style-btn${styleObj.font === v ? ' active' : ''}" data-panel="${id}" data-prop="font" data-val="${v}">${t}</button>`
+                ).join('');
+                const alignBtns = !showAlign ? '' : ALIGN_BTNS.map(o =>
+                    `<button class="style-btn${(styleObj.align || 'left') === o.v ? ' active' : ''}" data-panel="${id}" data-prop="align" data-val="${o.v}" title="${o.t}揃え">${o.icon}</button>`
                 ).join('');
 
                 return `<div class="style-panel" data-panel-id="${id}">
@@ -1221,6 +1487,7 @@
                             <div class="style-btn-group">${weightBtns}</div>
                         </div>
                         ${showFont ? `<div class="style-row"><span class="style-label">書体</span><div class="style-btn-group">${fontBtns}</div></div>` : ''}
+                        ${showAlign ? `<div class="style-row"><span class="style-label">揃え</span><div class="style-btn-group">${alignBtns}</div></div>` : ''}
                     </div>
                 </div>`;
             }
@@ -1280,12 +1547,12 @@
             function renderStylePanels() {
                 const tp = document.getElementById('title-style-panel');
                 if (tp) {
-                    tp.innerHTML = buildStylePanelHTML('title', state.titleStyle, { label: 'タイトルスタイル' });
+                    tp.innerHTML = buildStylePanelHTML('title', state.titleStyle, { label: 'タイトルスタイル', showAlign: true });
                     attachStylePanelEvents(tp);
                 }
                 const dp = document.getElementById('date-style-panel');
                 if (dp) {
-                    dp.innerHTML = buildStylePanelHTML('date', state.dateStyle, { label: '日付スタイル', showFont: false });
+                    dp.innerHTML = buildStylePanelHTML('date', state.dateStyle, { label: '日付スタイル', showFont: false, showAlign: true });
                     attachStylePanelEvents(dp);
                 }
             }
@@ -1300,8 +1567,8 @@
                     const row = document.createElement('div');
                     row.className = 'bg-slate-50 border border-slate-100 p-3 rounded-lg flex flex-col gap-2 relative group';
 
-                    const headingPanelHTML = buildStylePanelHTML(`heading_${i}`, item.headingStyle, { label: '見出しスタイル' });
-                    const contentPanelHTML = buildStylePanelHTML(`content_${i}`, item.contentStyle, { label: '本文スタイル', showFont: false });
+                    const headingPanelHTML = buildStylePanelHTML(`heading_${i}`, item.headingStyle, { label: '見出しスタイル', showAlign: true });
+                    const contentPanelHTML = buildStylePanelHTML(`content_${i}`, item.contentStyle, { label: '本文スタイル', showFont: false, showAlign: true });
 
                     row.innerHTML = `
                         <div class="flex items-center gap-2">
@@ -1351,6 +1618,7 @@
                 el.style.fontSize = SIZE_MAP[styleObj.size] || '';
                 el.style.fontWeight = styleObj.weight || '';
                 el.style.fontFamily = FONT_MAP[styleObj.font] || '';
+                el.style.textAlign = styleObj.align || '';
             }
 
             function updatePreview() {
@@ -1376,16 +1644,16 @@
 
                         const hs = item.headingStyle;
                         const cs = item.contentStyle;
-                        const headingInlineStyle = `color:${hs.color};font-size:${SIZE_MAP[hs.size]};font-weight:${hs.weight};font-family:${FONT_MAP[hs.font]};border-left-color:${hs.color};`;
-                        const contentInlineStyle = cs ? `color:${cs.color};font-size:${SIZE_MAP[cs.size]};font-weight:${cs.weight};font-family:${FONT_MAP[cs.font]};` : '';
+                        const headingInlineStyle = `color:${hs.color};font-size:${SIZE_MAP[hs.size]};font-weight:${hs.weight};font-family:${FONT_MAP[hs.font]};text-align:${hs.align || 'left'};border-left-color:${hs.color};`;
+                        const contentInlineStyle = cs ? `color:${cs.color};font-size:${SIZE_MAP[cs.size]};font-weight:${cs.weight};font-family:${FONT_MAP[cs.font]};text-align:${cs.align || 'left'};` : '';;
 
                         block.innerHTML = `
                             <div class="density-pad">
-                                <h2 class="border-l-[3px] pl-3 mb-3 flex items-center gap-2" style="${headingInlineStyle}">
+                                <h2 class="border-l-[3px] pl-3 mb-3 flex items-center gap-2" style="${headingInlineStyle}" data-clickable-style="heading_${i}">
                                     <span class="text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0" style="background:${hs.color};">${i + 1}</span>
                                     ${item.heading || '未入力'}
                                 </h2>
-                                ${item.content ? `<div class="leading-[1.8] whitespace-pre-wrap pl-5" style="${contentInlineStyle}">${item.content}</div>` : ''}
+                                ${item.content ? `<div class="leading-[1.8] whitespace-pre-wrap pl-5" style="${contentInlineStyle}" data-clickable-style="content_${i}">${item.content}</div>` : ''}
                                 ${memoHtml}
                             </div>`;
                         flowArea.appendChild(block);
