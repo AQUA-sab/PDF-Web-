@@ -1280,24 +1280,7 @@
                         updatePreview();
                     }
 
-                    // ── sourceCode があれば別タブでも開く（オプション） ──
-                    if (payload.sourceCode) {
-                        try {
-                            const blobUrl = URL.createObjectURL(new Blob([payload.sourceCode], { type: 'text/html' }));
-                            const newTab = window.open(blobUrl, '_blank');
-                            if (newTab && !newTab.closed) {
-                                setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
-                                showNotification('データを復元しました（別タブでも開きました）', 'success');
-                            } else {
-                                URL.revokeObjectURL(blobUrl);
-                                showNotification('データを復元しました', 'success');
-                            }
-                        } catch (_) {
-                            showNotification('データを復元しました', 'success');
-                        }
-                    } else {
-                        showNotification('データを復元しました', 'success');
-                    }
+                    showNotification('データを復元しました', 'success');
 
                 } catch (err) { console.error('Restore error:', err); showNotification('読み込みエラー: ' + err.message, 'error'); }
             }
