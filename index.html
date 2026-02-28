@@ -617,6 +617,101 @@
             color: #1A73E8;
         }
 
+        /* ====== 図形挿入ボタン ====== */
+        .shape-insert-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            padding: 6px 4px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: 700;
+            color: #475569;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        .shape-insert-btn:hover {
+            background: #eff6ff;
+            border-color: #93c5fd;
+            color: #1d4ed8;
+        }
+
+        .shape-insert-btn:active {
+            background: #dbeafe;
+        }
+
+        .shape-insert-btn svg {
+            display: block;
+        }
+
+        .shape-style-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .shape-style-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+        /* 図形SVGラッパー（プレビュー上） */
+        .draggable-shape-wrapper {
+            position: absolute;
+            cursor: move;
+            z-index: 45;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        .draggable-shape-wrapper.active {
+            outline: 2px dashed #4A90D9;
+            outline-offset: 2px;
+        }
+
+        .shape-resize-handle {
+            position: absolute;
+            bottom: -6px;
+            right: -6px;
+            width: 14px;
+            height: 14px;
+            background: #1A73E8;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: se-resize;
+            z-index: 55;
+        }
+
+        .shape-delete-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ef4444;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 56;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         .style-panel-toggle .toggle-arrow {
             transition: transform 0.2s;
             font-size: 9px;
@@ -816,11 +911,11 @@
                     </div>
                 </section>
 
-                <!-- アジェンダ項目 -->
+                <!-- 内容入力 -->
                 <section class="space-y-3">
                     <h3 class="section-label">
                         <span class="section-label-dot"></span>
-                        協議事項・アジェンダ
+                        内容入力
                     </h3>
                     <div id="items-container" class="space-y-3"></div>
                     <button id="btn-add-item"
@@ -844,6 +939,99 @@
                             class="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-md font-bold text-xs hover:bg-slate-100 transition-all flex items-center justify-center gap-2 shadow-sm">
                             <i data-lucide="image-plus" class="w-4 h-4"></i> 画像をアップロード
                         </button>
+                    </div>
+
+                    <!-- 図形挿入 -->
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-slate-600">図形を挿入（移動・リサイズ・色変更可）</span>
+                        </div>
+                        <div class="grid grid-cols-4 gap-1.5" id="shape-btn-grid">
+                            <button class="shape-insert-btn" data-shape="rect" title="四角形">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor"
+                                        stroke-width="2" />
+                                </svg>
+                                <span>四角</span>
+                            </button>
+                            <button class="shape-insert-btn" data-shape="circle" title="円">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
+                                </svg>
+                                <span>円</span>
+                            </button>
+                            <button class="shape-insert-btn" data-shape="triangle" title="三角形">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <polygon points="12,3 22,21 2,21" fill="none" stroke="currentColor"
+                                        stroke-width="2" />
+                                </svg>
+                                <span>三角</span>
+                            </button>
+                            <button class="shape-insert-btn" data-shape="line" title="直線">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2.5"
+                                        stroke-linecap="round" />
+                                </svg>
+                                <span>直線</span>
+                            </button>
+                            <button class="shape-insert-btn" data-shape="arrow" title="矢印">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <line x1="3" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" />
+                                    <polyline points="13,6 19,12 13,18" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                                <span>矢印</span>
+                            </button>
+                            <button class="shape-insert-btn" data-shape="diamond" title="ひし形">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <polygon points="12,2 22,12 12,22 2,12" fill="none" stroke="currentColor"
+                                        stroke-width="2" />
+                                </svg>
+                                <span>ひし形</span>
+                            </button>
+                            <button class="shape-insert-btn" data-shape="star" title="星形">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" fill="none"
+                                        stroke="currentColor" stroke-width="1.8" />
+                                </svg>
+                                <span>星</span>
+                            </button>
+                            <button class="shape-insert-btn" data-shape="callout" title="吹き出し">
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <path
+                                        d="M3 3h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4v-4H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"
+                                        fill="none" stroke="currentColor" stroke-width="1.8" />
+                                </svg>
+                                <span>吹き出し</span>
+                            </button>
+                        </div>
+                        <!-- 図形スタイル設定 -->
+                        <div class="shape-style-row mt-2">
+                            <label class="shape-style-label">塗り</label>
+                            <input type="color" id="shape-fill-color" value="#4A90D9"
+                                class="w-7 h-7 rounded cursor-pointer border border-slate-200">
+                            <label class="shape-style-label ml-1">線</label>
+                            <input type="color" id="shape-stroke-color" value="#1e293b"
+                                class="w-7 h-7 rounded cursor-pointer border border-slate-200">
+                            <label class="shape-style-label ml-1">線幅</label>
+                            <select id="shape-stroke-width"
+                                class="text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white">
+                                <option value="0">なし</option>
+                                <option value="1">細</option>
+                                <option value="2" selected>普通</option>
+                                <option value="4">太</option>
+                            </select>
+                            <label class="shape-style-label ml-1">透明</label>
+                            <select id="shape-opacity"
+                                class="text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white">
+                                <option value="1" selected>100%</option>
+                                <option value="0.75">75%</option>
+                                <option value="0.5">50%</option>
+                                <option value="0.25">25%</option>
+                                <option value="0">0%</option>
+                            </select>
+                        </div>
                     </div>
 
                     <label
@@ -1265,13 +1453,16 @@
                     // スライダーラッパー（初期非表示）
                     const sliderWrap = document.createElement('div');
                     sliderWrap.className = 'rotate-slider-wrap';
+                    const initRotation = imgData.rotation || 0;
                     sliderWrap.innerHTML = `
-                        <label >回転角</label>
-                        <input type="range" min="-180" max="180" step="1" value="${imgData.rotation || 0}" class="img-rotate-slider">
-                        <span class="rotate-val">${imgData.rotation || 0}°</span>
+                        <label>回転角</label>
+                        <input type="range" min="-180" max="180" step="1" value="${initRotation}" class="img-rotate-slider">
+                        <span class="rotate-val">${initRotation}°</span>
+                        <button class="rotate-reset-btn" title="リセット" style="font-size:14px;background:none;border:none;cursor:pointer;color:#94a3b8;padding:0 2px;line-height:1;" type="button">↺</button>
                     `;
                     const slider = sliderWrap.querySelector('.img-rotate-slider');
                     const rotateVal = sliderWrap.querySelector('.rotate-val');
+                    const resetBtn = sliderWrap.querySelector('.rotate-reset-btn');
                     slider.addEventListener('input', () => {
                         const deg = parseInt(slider.value);
                         rotateVal.textContent = deg + '°';
@@ -1281,6 +1472,26 @@
                     slider.addEventListener('change', () => {
                         updatePreview();
                     });
+                    // リセットボタン
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            imgData.rotation = 0;
+                            slider.value = 0;
+                            rotateVal.textContent = '0°';
+                            img.style.transform = 'rotate(0deg)';
+                            updatePreview();
+                        });
+                        resetBtn.addEventListener('touchstart', (e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            imgData.rotation = 0;
+                            slider.value = 0;
+                            rotateVal.textContent = '0°';
+                            img.style.transform = 'rotate(0deg)';
+                            updatePreview();
+                        }, { passive: false });
+                    }
 
                     function doRotate(e) {
                         e.stopPropagation();
@@ -1552,7 +1763,7 @@
                 }
                 const dp = document.getElementById('date-style-panel');
                 if (dp) {
-                    dp.innerHTML = buildStylePanelHTML('date', state.dateStyle, { label: '日付スタイル', showFont: false, showAlign: true });
+                    dp.innerHTML = buildStylePanelHTML('date', state.dateStyle, { label: '日付スタイル', showFont: false, showAlign: false });
                     attachStylePanelEvents(dp);
                 }
             }
@@ -1567,8 +1778,8 @@
                     const row = document.createElement('div');
                     row.className = 'bg-slate-50 border border-slate-100 p-3 rounded-lg flex flex-col gap-2 relative group';
 
-                    const headingPanelHTML = buildStylePanelHTML(`heading_${i}`, item.headingStyle, { label: '見出しスタイル', showAlign: true });
-                    const contentPanelHTML = buildStylePanelHTML(`content_${i}`, item.contentStyle, { label: '本文スタイル', showFont: false, showAlign: true });
+                    const headingPanelHTML = buildStylePanelHTML(`heading_${i}`, item.headingStyle, { label: '見出しスタイル', showAlign: false });
+                    const contentPanelHTML = buildStylePanelHTML(`content_${i}`, item.contentStyle, { label: '本文スタイル', showFont: false, showAlign: false });
 
                     row.innerHTML = `
                         <div class="flex items-center gap-2">
@@ -1579,8 +1790,10 @@
                         <textarea placeholder="内容（任意）" class="item-field w-full p-2 bg-white border border-slate-200 rounded leading-relaxed resize-none h-16" data-idx="${i}" data-key="content">${item.content}</textarea>
                         ${contentPanelHTML}
                         <div class="flex items-center gap-2 mt-1">
-                            <span class="text-[10px] text-slate-500 font-bold">協議メモ欄の行数:</span>
-                            <input type="number" min="0" max="20" value="${item.memoLines}" class="item-field w-16 p-1 text-center border border-slate-200 rounded" data-idx="${i}" data-key="memoLines">
+                            <span class="text-[10px] text-slate-500 font-bold">メモ欄の行数:</span>
+                            <button class="btn-memo-dec w-7 h-7 flex items-center justify-center text-slate-500 hover:text-white hover:bg-blue-500 bg-slate-100 rounded font-black text-sm transition-all select-none" data-idx="${i}" type="button">−</button>
+                            <input type="number" min="0" max="20" value="${item.memoLines}" class="item-field w-12 p-1 text-center border border-slate-200 rounded" data-idx="${i}" data-key="memoLines">
+                            <button class="btn-memo-inc w-7 h-7 flex items-center justify-center text-slate-500 hover:text-white hover:bg-blue-500 bg-slate-100 rounded font-black text-sm transition-all select-none" data-idx="${i}" type="button">＋</button>
                         </div>`;
                     c.appendChild(row);
                     attachStylePanelEvents(row);
@@ -1593,6 +1806,24 @@
                         state.items[+e.target.dataset.idx][e.target.dataset.key] = val;
                         updatePreview();
                     });
+                });
+                // メモ行数 +/- ボタン
+                function changeMemoLines(idx, delta) {
+                    const item = state.items[idx];
+                    if (!item) return;
+                    item.memoLines = Math.max(0, Math.min(20, (item.memoLines || 0) + delta));
+                    // 入力欄も同期
+                    const input = c.querySelector(`input[data-idx="${idx}"][data-key="memoLines"]`);
+                    if (input) input.value = item.memoLines;
+                    updatePreview();
+                }
+                c.querySelectorAll('.btn-memo-dec').forEach(btn => {
+                    btn.addEventListener('click', () => changeMemoLines(+btn.dataset.idx, -1));
+                    btn.addEventListener('touchstart', (e) => { e.preventDefault(); changeMemoLines(+btn.dataset.idx, -1); }, { passive: false });
+                });
+                c.querySelectorAll('.btn-memo-inc').forEach(btn => {
+                    btn.addEventListener('click', () => changeMemoLines(+btn.dataset.idx, 1));
+                    btn.addEventListener('touchstart', (e) => { e.preventDefault(); changeMemoLines(+btn.dataset.idx, 1); }, { passive: false });
                 });
                 c.querySelectorAll('.btn-del-item').forEach(el => {
                     el.addEventListener('click', e => { state.items.splice(+e.currentTarget.dataset.idx, 1); renderItemsForm(); updatePreview(); });
