@@ -5,14 +5,14 @@
     <meta charset="UTF-8">
     <!-- iPhoneでのズーム防止: maximum-scale=1, user-scalable=no -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>会議アジェンダ</title>
+    <title>資料作成アプリ</title>
 
     <!-- PWA・ホーム画面アイコン設定 -->
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" type="image/png" href="icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="会議アジェンダ">
+    <meta name="apple-mobile-web-app-title" content="資料作成アプリ">
 
     <link rel="stylesheet" crossorigin="anonymous"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Serif+JP:wght@300;400;700;900&family=M+PLUS+Rounded+1c:wght@400;700;900&family=Kosugi+Maru&family=Sawarabi+Mincho&display=swap">
@@ -810,6 +810,44 @@
             cursor: pointer;
             background: none;
         }
+
+        /* ====== モバイル編集ポップアップ（タッチで表示） ====== */
+        #mobile-edit-popup {
+            position: fixed;
+            z-index: 9999;
+            background: #1A73E8;
+            color: white;
+            border-radius: 20px;
+            padding: 8px 18px;
+            font-size: 14px;
+            font-weight: 700;
+            box-shadow: 0 4px 16px rgba(26, 115, 232, 0.45);
+            display: none;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            animation: popupFadeIn 0.15s ease;
+            white-space: nowrap;
+            touch-action: manipulation;
+        }
+
+        #mobile-edit-popup.visible {
+            display: flex;
+        }
+
+        @keyframes popupFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.85) translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
     </style>
 </head>
 
@@ -821,7 +859,7 @@
             <div class="app-logo-icon">
                 <i data-lucide="file-text" style="width:16px;height:16px;color:white;"></i>
             </div>
-            会議アジェンダ
+            資料作成アプリ
         </div>
         <div class="header-actions">
             <button class="hdr-btn-upload" onclick="document.getElementById('fileInput').click()">PDF読込</button>
@@ -1806,8 +1844,12 @@
                         resizeH.style.display = 'block';
                         // 左パネルのコントロールを選択図形の値に同期
                         syncShapeControlsToSelected(sd);
-                        // フローティングパネルを表示
-                        openShapeEditor(sd, wrapper);
+                        // モバイルでは編集ポップアップ経由、PCは即表示
+                        if (e.type === 'touchstart' && window.innerWidth < 768) {
+                            showMobileEditPopup(wrapper, () => openShapeEditor(sd, wrapper));
+                        } else {
+                            openShapeEditor(sd, wrapper);
+                        }
                     }
                     wrapper.addEventListener('touchstart', onShapeWrapperStart, { passive: false });
                     wrapper.addEventListener('mousedown', onShapeWrapperStart);
@@ -2124,15 +2166,78 @@
                 _fseCurrentTarget = null;
             }
 
-            // プレビュー内のクリックエベントをスコープ外で初期化
+            // ====== モバイル編集ポップアップ ======
+            let _mobilePopupCleanup = null;
+            function showMobileEditPopup(anchorEl, onConfirm) {
+                // 既存ポップアップを閉じる
+                hideMobileEditPopup();
+
+                let popup = document.getElementById('mobile-edit-popup');
+                if (!popup) {
+                    popup = document.createElement('div');
+                    popup.id = 'mobile-edit-popup';
+                    popup.innerHTML = '✎ 編集';
+                    document.body.appendChild(popup);
+                }
+
+                // 位置計算: アンカー要素の上またはした
+                const rect = anchorEl.getBoundingClientRect();
+                popup.classList.add('visible');
+                // レンダリング後に位置確定
+                requestAnimationFrame(() => {
+                    const pw = popup.offsetWidth || 90;
+                    const ph = popup.offsetHeight || 40;
+                    let top = rect.bottom + 6;
+                    let left = rect.left + (rect.width - pw) / 2;
+                    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
+                    if (left < 8) left = 8;
+                    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+                    popup.style.top = top + 'px';
+                    popup.style.left = left + 'px';
+                });
+
+                // 「編集」ボタンをタップ→編集パネルを開く
+                function onPopupTap(e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    hideMobileEditPopup();
+                    onConfirm();
+                }
+                popup.addEventListener('touchstart', onPopupTap, { passive: false });
+                popup.addEventListener('click', onPopupTap);
+
+                // 外部タッチでポップアップを閉じる（少し遅延して登録）
+                function onOutside(e) {
+                    if (e.target !== popup && !popup.contains(e.target)) {
+                        hideMobileEditPopup();
+                    }
+                }
+                setTimeout(() => {
+                    document.addEventListener('touchstart', onOutside, { passive: true });
+                    document.addEventListener('mousedown', onOutside);
+                }, 100);
+
+                _mobilePopupCleanup = () => {
+                    popup.removeEventListener('touchstart', onPopupTap);
+                    popup.removeEventListener('click', onPopupTap);
+                    document.removeEventListener('touchstart', onOutside);
+                    document.removeEventListener('mousedown', onOutside);
+                };
+            }
+
+            function hideMobileEditPopup() {
+                const popup = document.getElementById('mobile-edit-popup');
+                if (popup) popup.classList.remove('visible');
+                if (_mobilePopupCleanup) { _mobilePopupCleanup(); _mobilePopupCleanup = null; }
+            }
+
+            // プレビュー内のクリックイベントをスコープ外で初期化
             function initPreviewClickEdit() {
                 const pc = document.getElementById('preview-container');
-                function handlePreviewClick(e) {
-                    const target = e.target.closest('[data-clickable-style]');
-                    if (!target) return;
-                    e.stopPropagation();
-                    if (e.cancelable) e.preventDefault();
-                    const panelId = target.dataset.clickableStyle;
+
+                // 編集処理の共通ロジック
+                function doOpenEditor(targetEl) {
+                    const panelId = targetEl.dataset.clickableStyle;
                     let styleObj, label;
                     if (panelId === 'title') {
                         styleObj = state.titleStyle; label = 'タイトル';
@@ -2146,12 +2251,36 @@
                         styleObj = state.items[idx]?.contentStyle; label = `本文${idx + 1}`;
                     }
                     if (!styleObj) return;
-                    openFloatingEditor(panelId, label, styleObj, target);
+                    openFloatingEditor(panelId, label, styleObj, targetEl);
                 }
-                pc.addEventListener('click', handlePreviewClick);
-                pc.addEventListener('touchend', (e) => {
-                    if (e.changedTouches.length === 1) handlePreviewClick(e.changedTouches[0] ? { target: e.target, stopPropagation: () => { }, preventDefault: () => { }, cancelable: e.cancelable } : e);
-                }, { passive: false });
+
+                // PC: クリックで即座に編集パネルを開く
+                pc.addEventListener('click', (e) => {
+                    const target = e.target.closest('[data-clickable-style]');
+                    if (!target) return;
+                    e.stopPropagation();
+                    doOpenEditor(target);
+                });
+
+                // モバイル: タッチで「編集」ポップアップを表示 → タップで編集パネルを開く
+                pc.addEventListener('touchstart', (e) => {
+                    const target = e.target.closest('[data-clickable-style]');
+                    if (!target) return;
+                    e.stopPropagation();
+                    // ドラッグとの誤判定を防ぐため touchend で確定
+                    const startX = e.touches[0].clientX;
+                    const startY = e.touches[0].clientY;
+                    function onTouchEnd(te) {
+                        pc.removeEventListener('touchend', onTouchEnd);
+                        const movedX = Math.abs(te.changedTouches[0].clientX - startX);
+                        const movedY = Math.abs(te.changedTouches[0].clientY - startY);
+                        if (movedX < 10 && movedY < 10) {
+                            // タップ判定: ポップアップ表示
+                            showMobileEditPopup(target, () => doOpenEditor(target));
+                        }
+                    }
+                    pc.addEventListener('touchend', onTouchEnd, { once: true });
+                }, { passive: true });
             }
 
             // ====== スタイルパネルHTML生成ヘルパー ======
