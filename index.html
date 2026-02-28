@@ -280,6 +280,28 @@
             display: none !important;
         }
 
+        /* 図形キャプチャ時クリーンアップ */
+        .is-capturing .draggable-shape-wrapper {
+            outline: none !important;
+        }
+
+        .is-capturing .shape-delete-btn,
+        .is-capturing .draggable-shape-wrapper>div[style*="bottom:-6px"] {
+            display: none !important;
+        }
+
+        .is-capturing .shape-editor-panel {
+            display: none !important;
+        }
+
+        /* shape-layer */
+        .shape-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 42;
+            pointer-events: none;
+        }
+
         /* ====== スプリッターバー (iPhone向け縦分割) ====== */
         #splitter {
             display: none;
@@ -1108,7 +1130,8 @@
                         headingStyle: { ...DEFAULT_HEADING_STYLE }, contentStyle: { ...DEFAULT_CONTENT_STYLE }
                     }
                 ],
-                images: []
+                images: [],
+                shapes: []
             };
 
             /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = { "title": "月例開発チームミーティング アジェンダ", "date": "2026年2月26日", "includeMemoPage": false, "titleStyle": { "font": "sans", "color": "#1e293b", "size": "2xl", "weight": "900" }, "dateStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" }, "items": [{ "heading": "前回の振り返り", "content": "・新機能リリースの反響\n・発生した不具合の対応状況", "memoLines": 3, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }, { "heading": "今月の目標共有", "content": "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", "memoLines": 4, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }, { "heading": "各担当からの進捗報告", "content": "", "memoLines": 6, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }], "images": [] }; /* __INJECTED_DATA_END__ */
@@ -1137,6 +1160,7 @@
 
                 attachEventListeners();
                 initImageEvents();
+                initShapeEvents();   // ★ 図形挿入の初期化
                 initSplitter();      // ★ スプリッターの初期化
                 initPreviewClickEdit(); // ★ プレビュークリック編集
                 syncFormInputs();
@@ -1520,6 +1544,452 @@
                 // lucide不要（ボタンはCSSデコレーターで表示）
             }
 
+            // ====== 図形挿入・編集・削除ロジック ======
+            let selectedShapeId = null;
+            let isShapeDragging = false;
+            let isShapeResizing = false;
+            let currentActiveShape = null;
+            let shapeStartX, shapeStartY, shapeStartLeft, shapeStartTop, shapeStartW, shapeStartH;
+
+            function initShapeEvents() {
+                // 図形挿入ボタンのクリック
+                document.querySelectorAll('.shape-insert-btn[data-shape]').forEach(btn => {
+                    btn.addEventListener('click', () => insertShape(btn.dataset.shape));
+                    btn.addEventListener('touchend', (e) => { e.preventDefault(); insertShape(btn.dataset.shape); }, { passive: false });
+                });
+
+                // 左パネルのスタイル変更 → 選択中図形にリアルタイム反映
+                document.getElementById('shape-fill-color').addEventListener('input', () => {
+                    if (!selectedShapeId) return;
+                    const s = state.shapes.find(s => s.id === selectedShapeId);
+                    if (s) { s.fillColor = document.getElementById('shape-fill-color').value; s.noFill = false; renderShapes(); }
+                });
+                document.getElementById('shape-stroke-color').addEventListener('input', () => {
+                    if (!selectedShapeId) return;
+                    const s = state.shapes.find(s => s.id === selectedShapeId);
+                    if (s) { s.strokeColor = document.getElementById('shape-stroke-color').value; renderShapes(); }
+                });
+                document.getElementById('shape-stroke-width').addEventListener('change', () => {
+                    if (!selectedShapeId) return;
+                    const s = state.shapes.find(s => s.id === selectedShapeId);
+                    if (s) { s.strokeWidth = parseInt(document.getElementById('shape-stroke-width').value); renderShapes(); }
+                });
+                document.getElementById('shape-opacity').addEventListener('change', () => {
+                    if (!selectedShapeId) return;
+                    const s = state.shapes.find(s => s.id === selectedShapeId);
+                    if (s) { s.opacity = parseFloat(document.getElementById('shape-opacity').value); renderShapes(); }
+                });
+
+                // ウィンドウレベル: 図形ドラッグ/リサイズ移動追跡
+                function onGlobalShapeMove(e) {
+                    if (!isShapeDragging && !isShapeResizing || !currentActiveShape) return;
+                    const pos = getPointerPos(e);
+                    const dx = (pos.x - shapeStartX) / currentScale;
+                    const dy = (pos.y - shapeStartY) / currentScale;
+                    if (isShapeDragging) {
+                        currentActiveShape.style.left = `${shapeStartLeft + dx}px`;
+                        currentActiveShape.style.top = `${shapeStartTop + dy}px`;
+                    } else if (isShapeResizing) {
+                        currentActiveShape.style.width = `${Math.max(20, shapeStartW + dx)}px`;
+                        currentActiveShape.style.height = `${Math.max(20, shapeStartH + dy)}px`;
+                    }
+                    if (e.cancelable) e.preventDefault();
+                }
+
+                function onGlobalShapeUp(e) {
+                    if (!isShapeDragging && !isShapeResizing) return;
+                    const pos = getPointerPos(e);
+                    const movedX = Math.abs(pos.x - shapeStartX);
+                    const movedY = Math.abs(pos.y - shapeStartY);
+                    const isTap = movedX < 8 && movedY < 8;
+
+                    if (currentActiveShape && !isTap) {
+                        const id = currentActiveShape.dataset.shapeId;
+                        const sd = state.shapes.find(s => s.id === id);
+                        if (sd) {
+                            let newLeft = parseFloat(currentActiveShape.style.left);
+                            let newTop = parseFloat(currentActiveShape.style.top);
+                            sd.width = parseFloat(currentActiveShape.style.width);
+                            sd.height = parseFloat(currentActiveShape.style.height);
+                            let pg = sd.page || 0;
+                            const ph = currentPageSize.h;
+                            if (newTop > ph) { const s = Math.floor(newTop / ph); pg += s; newTop -= ph * s; }
+                            else if (newTop < 0 && pg > 0) { const s = Math.ceil(Math.abs(newTop) / ph); pg = Math.max(0, pg - s); newTop += ph * s; }
+                            sd.x = newLeft; sd.y = newTop; sd.page = pg;
+                        }
+                        updatePreview();
+                    }
+                    isShapeDragging = false;
+                    isShapeResizing = false;
+                    currentActiveShape = null;
+                }
+
+                window.addEventListener('mousemove', onGlobalShapeMove);
+                window.addEventListener('mouseup', onGlobalShapeUp);
+                window.addEventListener('touchmove', onGlobalShapeMove, { passive: false });
+                window.addEventListener('touchend', onGlobalShapeUp);
+
+                // プレビュー外クリックで図形選択解除
+                const pc = document.getElementById('preview-container');
+                pc.addEventListener('mousedown', (e) => {
+                    if (!e.target.closest('.draggable-shape-wrapper')) {
+                        selectedShapeId = null;
+                        renderShapes();
+                    }
+                });
+                pc.addEventListener('touchstart', (e) => {
+                    if (!e.target.closest('.draggable-shape-wrapper')) {
+                        selectedShapeId = null;
+                        renderShapes();
+                    }
+                }, { passive: true });
+            }
+
+            function insertShape(type) {
+                const fillC = document.getElementById('shape-fill-color').value || '#4A90D9';
+                const strokeC = document.getElementById('shape-stroke-color').value || '#1e293b';
+                const strokeW = parseInt(document.getElementById('shape-stroke-width').value);
+                const opacity = parseFloat(document.getElementById('shape-opacity').value);
+                const isLine = (type === 'line' || type === 'arrow');
+                const newShape = {
+                    id: 'shape_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                    type: type,
+                    x: 150, y: 200,
+                    width: isLine ? 200 : 150,
+                    height: isLine ? 40 : 100,
+                    page: 0,
+                    fillColor: fillC,
+                    strokeColor: strokeC,
+                    strokeWidth: isNaN(strokeW) ? 2 : strokeW,
+                    opacity: isNaN(opacity) ? 1 : opacity,
+                    noFill: false
+                };
+                if (!state.shapes) state.shapes = [];
+                state.shapes.push(newShape);
+                selectedShapeId = newShape.id;
+                renderShapes();
+                showNotification(type + ' を挿入しました', 'success');
+            }
+
+            function buildSVGShape(type, w, h, fillColor, strokeColor, strokeWidth, noFill) {
+                const fill = noFill ? 'none' : fillColor;
+                const sw = strokeWidth;
+                const stroke = sw > 0 ? strokeColor : 'none';
+                const vb = `0 0 ${w} ${h}`;
+                let inner = '';
+                if (type === 'rect') {
+                    inner = `<rect x="${sw / 2}" y="${sw / 2}" width="${w - sw}" height="${h - sw}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+                } else if (type === 'circle') {
+                    const cx = w / 2, cy = h / 2, rx = (w - sw) / 2, ry = (h - sw) / 2;
+                    inner = `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+                } else if (type === 'triangle') {
+                    const pts = `${w / 2},${sw} ${w - sw},${h - sw} ${sw},${h - sw}`;
+                    inner = `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+                } else if (type === 'diamond') {
+                    const pts = `${w / 2},${sw} ${w - sw},${h / 2} ${w / 2},${h - sw} ${sw},${h / 2}`;
+                    inner = `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+                } else if (type === 'star') {
+                    const cx2 = w / 2, cy2 = h / 2;
+                    const R = Math.min(w, h) / 2 - sw, r = R * 0.45;
+                    let pts2 = '';
+                    for (let i = 0; i < 10; i++) { const a = Math.PI / 5 * i - Math.PI / 2; const ri = i % 2 === 0 ? R : r; pts2 += `${cx2 + ri * Math.cos(a)},${cy2 + ri * Math.sin(a)} `; }
+                    inner = `<polygon points="${pts2.trim()}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+                } else if (type === 'line') {
+                    inner = `<line x1="${sw}" y1="${h / 2}" x2="${w - sw}" y2="${h / 2}" stroke="${strokeColor}" stroke-width="${sw || 2}" stroke-linecap="round"/>`;
+                } else if (type === 'arrow') {
+                    const aw = Math.min(20, w * 0.2), ah = Math.min(12, h * 0.4);
+                    inner = `<line x1="${sw}" y1="${h / 2}" x2="${w - aw - sw}" y2="${h / 2}" stroke="${strokeColor}" stroke-width="${sw || 2}" stroke-linecap="round"/>
+                    <polygon points="${w - aw - sw},${h / 2 - ah} ${w - sw},${h / 2} ${w - aw - sw},${h / 2 + ah}" fill="${strokeColor}" stroke="none"/>`;
+                } else if (type === 'callout') {
+                    const r2 = 6, tw = h * 0.3, tx = w * 0.15;
+                    inner = `<path d="M${r2},${sw} H${w - r2 - sw} Q${w - sw},${sw} ${w - sw},${r2 + sw} V${h * 0.7} Q${w - sw},${h * 0.7 + r2} ${w - r2 - sw},${h * 0.7 + r2} H${tx + tw} L${tx},${h - sw} L${tx + tw * 0.4},${h * 0.7 + r2} H${r2} Q${sw},${h * 0.7 + r2} ${sw},${h * 0.7} V${r2 + sw} Q${sw},${sw} ${r2},${sw} Z" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+                }
+                return `<svg viewBox="${vb}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" style="display:block;">${inner}</svg>`;
+            }
+
+            function renderShapes() {
+                // 既存の shape-layer を全クリア
+                document.querySelectorAll('.shape-layer').forEach(l => l.innerHTML = '');
+                // shape-layer が存在しないページに作成
+                document.querySelectorAll('.pdf-page').forEach(page => {
+                    let sl = page.querySelector('.shape-layer');
+                    if (!sl) {
+                        sl = document.createElement('div');
+                        sl.className = 'shape-layer absolute inset-0 z-42 pointer-events-none';
+                        page.insertBefore(sl, page.querySelector('.img-layer') || page.firstChild);
+                    }
+                    sl.innerHTML = '';
+                });
+
+                if (!state.shapes) return;
+                const totalPages = document.querySelectorAll('.pdf-page').length;
+
+                state.shapes.forEach(sd => {
+                    const pageIndex = Math.min(sd.page || 0, totalPages - 1);
+                    const targetPage = document.querySelector(`.pdf-page[data-page="${pageIndex}"]`);
+                    if (!targetPage) return;
+                    let sl = targetPage.querySelector('.shape-layer');
+                    if (!sl) return;
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'draggable-shape-wrapper pointer-events-auto' +
+                        (sd.id === selectedShapeId ? ' active' : '');
+                    wrapper.dataset.shapeId = sd.id;
+                    wrapper.style.cssText =
+                        `position:absolute;left:${sd.x}px;top:${sd.y}px;` +
+                        `width:${sd.width}px;height:${sd.height}px;` +
+                        `opacity:${sd.opacity};touch-action:none;cursor:move;user-select:none;`;
+
+                    // SVG本体
+                    const svgDiv = document.createElement('div');
+                    svgDiv.style.cssText = 'width:100%;height:100%;pointer-events:none;';
+                    svgDiv.innerHTML = buildSVGShape(sd.type, sd.width, sd.height, sd.fillColor, sd.strokeColor, sd.strokeWidth, sd.noFill);
+
+                    // 削除ボタン
+                    const delBtn = document.createElement('div');
+                    delBtn.className = 'shape-delete-btn';
+                    delBtn.innerHTML = '✕';
+                    delBtn.style.cssText = 'position:absolute;top:-10px;right:-10px;width:20px;height:20px;border-radius:50%;' +
+                        'background:#ef4444;color:white;border:2px solid white;cursor:pointer;font-size:11px;font-weight:bold;' +
+                        'display:' + (sd.id === selectedShapeId ? 'flex' : 'none') + ';align-items:center;justify-content:center;' +
+                        'box-shadow:0 2px 4px rgba(0,0,0,0.25);z-index:56;touch-action:manipulation;';
+                    function doShapeDelete(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        isShapeDragging = false; isShapeResizing = false; currentActiveShape = null;
+                        selectedShapeId = null;
+                        state.shapes = state.shapes.filter(x => x.id !== sd.id);
+                        renderShapes();
+                    }
+                    delBtn.addEventListener('touchstart', doShapeDelete, { passive: false });
+                    delBtn.addEventListener('mousedown', doShapeDelete);
+
+                    // リサイズハンドル
+                    const resizeH = document.createElement('div');
+                    resizeH.style.cssText = 'position:absolute;bottom:-6px;right:-6px;width:14px;height:14px;' +
+                        'background:#1A73E8;border:2px solid white;border-radius:50%;cursor:se-resize;z-index:55;' +
+                        'display:' + (sd.id === selectedShapeId ? 'block' : 'none') + ';touch-action:none;';
+                    function onShapeResizeStart(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        isShapeResizing = true; isShapeDragging = false;
+                        currentActiveShape = wrapper;
+                        selectedShapeId = sd.id;
+                        const pos = getPointerPos(e);
+                        shapeStartX = pos.x; shapeStartY = pos.y;
+                        shapeStartW = parseFloat(wrapper.style.width);
+                        shapeStartH = parseFloat(wrapper.style.height);
+                    }
+                    resizeH.addEventListener('touchstart', onShapeResizeStart, { passive: false });
+                    resizeH.addEventListener('mousedown', onShapeResizeStart);
+
+                    // ラッパードラッグ (移動 + 選択)
+                    function onShapeWrapperStart(e) {
+                        if (e.target.closest('.shape-delete-btn') || e.target === resizeH) return;
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        isShapeDragging = true; isShapeResizing = false;
+                        currentActiveShape = wrapper;
+                        selectedShapeId = sd.id;
+                        const pos = getPointerPos(e);
+                        shapeStartX = pos.x; shapeStartY = pos.y;
+                        shapeStartLeft = parseFloat(wrapper.style.left);
+                        shapeStartTop = parseFloat(wrapper.style.top);
+                        // 選択状態を即反映
+                        document.querySelectorAll('.draggable-shape-wrapper').forEach(w => {
+                            w.classList.remove('active');
+                            w.querySelector('.shape-delete-btn') && (w.querySelector('.shape-delete-btn').style.display = 'none');
+                            w.querySelectorAll('[data-resize]').forEach(h => h.style.display = 'none');
+                        });
+                        wrapper.classList.add('active');
+                        delBtn.style.display = 'flex';
+                        resizeH.style.display = 'block';
+                        // 左パネルのコントロールを選択図形の値に同期
+                        syncShapeControlsToSelected(sd);
+                        // フローティングパネルを表示
+                        openShapeEditor(sd, wrapper);
+                    }
+                    wrapper.addEventListener('touchstart', onShapeWrapperStart, { passive: false });
+                    wrapper.addEventListener('mousedown', onShapeWrapperStart);
+
+                    wrapper.appendChild(svgDiv);
+                    wrapper.appendChild(delBtn);
+                    wrapper.appendChild(resizeH);
+                    sl.appendChild(wrapper);
+                });
+            }
+
+            function syncShapeControlsToSelected(sd) {
+                const fc = document.getElementById('shape-fill-color');
+                const sc = document.getElementById('shape-stroke-color');
+                const sw = document.getElementById('shape-stroke-width');
+                const op = document.getElementById('shape-opacity');
+                if (fc && !sd.noFill) fc.value = sd.fillColor || '#4A90D9';
+                if (sc) sc.value = sd.strokeColor || '#1e293b';
+                if (sw) sw.value = String(sd.strokeWidth ?? 2);
+                if (op) op.value = String(sd.opacity ?? 1);
+            }
+
+            // 図形用フローティング編集パネル
+            let _shapeEditorPanel = null;
+            function openShapeEditor(sd, anchorEl) {
+                // 既存パネルを削除
+                if (_shapeEditorPanel) { _shapeEditorPanel.remove(); _shapeEditorPanel = null; }
+
+                const panel = document.createElement('div');
+                panel.className = 'shape-editor-panel';
+                panel.style.cssText = 'position:fixed;z-index:9100;background:white;border-radius:14px;' +
+                    'box-shadow:0 8px 32px rgba(0,0,0,0.18),0 2px 8px rgba(0,0,0,0.10);' +
+                    'padding:12px 14px;min-width:240px;border:1px solid #e2e8f0;' +
+                    'display:flex;flex-direction:column;gap:8px;';
+
+                const noFillChecked = sd.noFill ? 'checked' : '';
+                panel.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:900;color:#1e293b;border-bottom:1px solid #f1f5f9;padding-bottom:8px;">
+                        <span>図形スタイル編集</span>
+                        <span id="shape-panel-close" style="cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 4px;border-radius:4px;">✕</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <span style="font-size:10px;font-weight:700;color:#64748b;width:50px;">塗り色</span>
+                        <input type="color" id="sp-fill" value="${sd.noFill ? '#ffffff' : (sd.fillColor || '#4A90D9')}" style="width:28px;height:22px;border:1px solid #cbd5e1;border-radius:5px;padding:1px;cursor:pointer;">
+                        <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:#64748b;cursor:pointer;">
+                            <input type="checkbox" id="sp-nofill" ${noFillChecked} style="width:12px;height:12px;"> 塗りなし
+                        </label>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:10px;font-weight:700;color:#64748b;width:50px;">枠線色</span>
+                        <input type="color" id="sp-stroke" value="${sd.strokeColor || '#1e293b'}" style="width:28px;height:22px;border:1px solid #cbd5e1;border-radius:5px;padding:1px;cursor:pointer;">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:10px;font-weight:700;color:#64748b;width:50px;">線幅</span>
+                        <select id="sp-sw" style="font-size:10px;border:1px solid #e2e8f0;border-radius:5px;padding:2px 4px;background:white;">
+                            <option value="0"${sd.strokeWidth === 0 ? ' selected' : ''}>なし</option>
+                            <option value="1"${sd.strokeWidth === 1 ? ' selected' : ''}>細</option>
+                            <option value="2"${(sd.strokeWidth ?? 2) === 2 ? ' selected' : ''}>普通</option>
+                            <option value="4"${sd.strokeWidth === 4 ? ' selected' : ''}>太</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:10px;font-weight:700;color:#64748b;width:50px;">透明度</span>
+                        <select id="sp-op" style="font-size:10px;border:1px solid #e2e8f0;border-radius:5px;padding:2px 4px;background:white;">
+                            <option value="1"${(sd.opacity ?? 1) >= 1 ? ' selected' : ''}>100%</option>
+                            <option value="0.75"${sd.opacity === 0.75 ? ' selected' : ''}>75%</option>
+                            <option value="0.5"${sd.opacity === 0.5 ? ' selected' : ''}>50%</option>
+                            <option value="0.25"${sd.opacity === 0.25 ? ' selected' : ''}>25%</option>
+                        </select>
+                    </div>`;
+
+                document.body.appendChild(panel);
+                _shapeEditorPanel = panel;
+
+                // 位置調整
+                const rect = anchorEl.getBoundingClientRect();
+                const pw2 = panel.offsetWidth || 260, ph2 = panel.offsetHeight || 220;
+                let top, left;
+
+                if (window.innerWidth >= 768) {
+                    // PC: PDFページ（様式）の左外側・プレビュー領域内に配置
+                    const pdfPage = document.querySelector('.capture-area-container') || document.querySelector('.pdf-page');
+                    const pc = document.getElementById('preview-container');
+                    if (pdfPage && pc) {
+                        const pageRect = pdfPage.getBoundingClientRect();
+                        const pcRect = pc.getBoundingClientRect();
+                        // PDFページ左端のさらに左に配置（余白がなければプレビュー左端）
+                        left = Math.max(pcRect.left + 6, pageRect.left - pw2 - 10);
+                        // 縦はアンカー要素の高さに合わせて表示（画面内に収める）
+                        top = Math.min(Math.max(rect.top, pcRect.top + 8), window.innerHeight - ph2 - 8);
+
+                        // テキスト編集パネルが表示中なら重ならないよう縦に並べる
+                        const fse = document.getElementById('floating-style-editor');
+                        if (fse && fse.classList.contains('visible')) {
+                            const fr = fse.getBoundingClientRect();
+                            if (top < fr.bottom + 6 && top + ph2 > fr.top - 6) {
+                                top = fr.bottom + 8;
+                                if (top + ph2 > window.innerHeight - 8) {
+                                    top = fr.top - ph2 - 8;
+                                }
+                            }
+                        }
+                    } else {
+                        // フォールバック: 左端寄せ
+                        left = 8;
+                        top = Math.min(rect.top, window.innerHeight - ph2 - 8);
+                    }
+                } else {
+                    // モバイル: 従来通りアンカー要素の下に表示
+                    top = rect.bottom + 8;
+                    left = rect.left;
+                    if (left + pw2 > window.innerWidth - 8) left = window.innerWidth - pw2 - 8;
+                    if (left < 8) left = 8;
+                    if (top + ph2 > window.innerHeight - 8) top = rect.top - ph2 - 8;
+                }
+                panel.style.left = left + 'px'; panel.style.top = top + 'px';
+
+                // パネル位置を再計算する共通関数（レンダリング後にDOMが更新されるため再居履が必要）
+                function positionShapePanel() {
+                    const pw3 = panel.offsetWidth || 260, ph3 = panel.offsetHeight || 220;
+                    if (window.innerWidth >= 768) {
+                        const pdfPage3 = document.querySelector('.capture-area-container') || document.querySelector('.pdf-page');
+                        const pc3 = document.getElementById('preview-container');
+                        if (pdfPage3 && pc3) {
+                            const pageRect3 = pdfPage3.getBoundingClientRect();
+                            const pcRect3 = pc3.getBoundingClientRect();
+                            let l3 = Math.max(pcRect3.left + 6, pageRect3.left - pw3 - 10);
+                            let t3 = Math.min(Math.max(parseFloat(panel.style.top) || pcRect3.top + 8, pcRect3.top + 8), window.innerHeight - ph3 - 8);
+                            panel.style.left = l3 + 'px'; panel.style.top = t3 + 'px';
+                        }
+                    }
+                }
+
+                // イベント
+                panel.querySelector('#shape-panel-close').addEventListener('click', () => { panel.remove(); _shapeEditorPanel = null; });
+                panel.querySelector('#sp-fill').addEventListener('input', (e) => {
+                    sd.fillColor = e.target.value; sd.noFill = false;
+                    panel.querySelector('#sp-nofill').checked = false;
+                    document.getElementById('shape-fill-color').value = e.target.value;
+                    renderShapes();
+                    positionShapePanel();
+                });
+                panel.querySelector('#sp-nofill').addEventListener('change', (e) => {
+                    sd.noFill = e.target.checked;
+                    renderShapes();
+                    const w2 = document.querySelector(`.draggable-shape-wrapper[data-shape-id="${sd.id}"]`);
+                    if (w2) openShapeEditor(sd, w2);
+                });
+                panel.querySelector('#sp-stroke').addEventListener('input', (e) => {
+                    sd.strokeColor = e.target.value;
+                    document.getElementById('shape-stroke-color').value = e.target.value;
+                    renderShapes();
+                    positionShapePanel();
+                });
+                panel.querySelector('#sp-sw').addEventListener('change', (e) => {
+                    sd.strokeWidth = parseInt(e.target.value);
+                    document.getElementById('shape-stroke-width').value = e.target.value;
+                    renderShapes();
+                    const w2 = document.querySelector(`.draggable-shape-wrapper[data-shape-id="${sd.id}"]`);
+                    if (w2) openShapeEditor(sd, w2);
+                });
+                panel.querySelector('#sp-op').addEventListener('change', (e) => {
+                    sd.opacity = parseFloat(e.target.value);
+                    document.getElementById('shape-opacity').value = e.target.value;
+                    renderShapes();
+                    positionShapePanel();
+                });
+
+                // パネル外クリックで閉じる
+                setTimeout(() => {
+                    function onOutsideClick(e) {
+                        if (!panel.contains(e.target) && !e.target.closest('.draggable-shape-wrapper')) {
+                            panel.remove(); _shapeEditorPanel = null;
+                            document.removeEventListener('mousedown', onOutsideClick);
+                            document.removeEventListener('touchstart', onOutsideClick);
+                        }
+                    }
+                    document.addEventListener('mousedown', onOutsideClick);
+                    document.addEventListener('touchstart', onOutsideClick, { passive: true });
+                }, 100);
+            }
+
             // ====== プレビュークリック/タッチでスタイル編集パネルを表示 ======
             let _fseCurrentTarget = null;
 
@@ -1605,14 +2075,45 @@
                 const panel = document.getElementById('floating-style-editor');
                 if (!panel || !anchorEl) return;
                 const rect = anchorEl.getBoundingClientRect();
-                let top = rect.bottom + 8;
-                let left = rect.left;
-                // 画面はみ出し辺処理
                 const pw = panel.offsetWidth || 300;
-                const ph = panel.offsetHeight || 200;
-                if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
-                if (left < 8) left = 8;
-                if (top + ph > window.innerHeight - 8) top = rect.top - ph - 8;
+                const ph = panel.offsetHeight || 220;
+                let top, left;
+
+                if (window.innerWidth >= 768) {
+                    // PC: PDFページ（様式）の左外側に配置
+                    const pdfPage = document.querySelector('.capture-area-container') || document.querySelector('.pdf-page');
+                    const pc = document.getElementById('preview-container');
+                    if (pdfPage && pc) {
+                        const pageRect = pdfPage.getBoundingClientRect();
+                        const pcRect = pc.getBoundingClientRect();
+                        left = Math.max(pcRect.left + 6, pageRect.left - pw - 10);
+                        // アンカー要素の縦位置に合わせる（画面内に収める）
+                        top = Math.min(Math.max(rect.top, pcRect.top + 8), window.innerHeight - ph - 8);
+
+                        // 図形編集パネルが表示中なら重ならないよう縦に並べる
+                        if (_shapeEditorPanel && _shapeEditorPanel.isConnected) {
+                            const sr = _shapeEditorPanel.getBoundingClientRect();
+                            // 両パネルが重なる場合、テキストパネルを図形パネルの下に移動
+                            if (top < sr.bottom + 6 && top + ph > sr.top - 6) {
+                                top = sr.bottom + 8;
+                                // 画面外にはみ出す場合は上に
+                                if (top + ph > window.innerHeight - 8) {
+                                    top = sr.top - ph - 8;
+                                }
+                            }
+                        }
+                    } else {
+                        left = 8;
+                        top = Math.min(rect.top, window.innerHeight - ph - 8);
+                    }
+                } else {
+                    // モバイル: 従来通りアンカー要素の下に表示
+                    top = rect.bottom + 8;
+                    left = rect.left;
+                    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+                    if (left < 8) left = 8;
+                    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 8;
+                }
                 panel.style.left = left + 'px';
                 panel.style.top = top + 'px';
             }
@@ -1896,6 +2397,7 @@
                 autoPaginate();
                 addMemoPageIfNeeded();
                 renderImages();
+                renderShapes();
                 autoAdjustDensity();
             }
 
@@ -2084,6 +2586,8 @@
                 const n = dc.querySelector('#notification'); if (n) n.classList.add('hidden');
                 const ov = dc.querySelector('#pdf-overlay'); if (ov) ov.classList.remove('active');
                 dc.querySelectorAll('.img-layer').forEach(layer => layer.innerHTML = '');
+                dc.querySelectorAll('.shape-layer').forEach(layer => layer.innerHTML = '');
+                dc.querySelectorAll('.shape-editor-panel').forEach(p => p.remove());
                 dc.querySelectorAll('svg[data-lucide]').forEach(svg => {
                     const i = document.createElement('i'); i.setAttribute('data-lucide', svg.getAttribute('data-lucide'));
                     const cls = svg.getAttribute('class'); if (cls) i.setAttribute('class', cls.replace(/lucide\s*lucide-[\w-]+\s*/g, '').trim());
@@ -2120,11 +2624,12 @@
             }
 
             function handleClearForm() {
-                if (!confirm('入力した内容と挿入された画像をすべて消去します。よろしいですか？')) return;
+                if (!confirm('入力した内容と挿入された画像・図形をすべて消去します。よろしいですか？')) return;
                 state.title = '';
                 state.date = '';
                 state.items = [];
                 state.images = [];
+                state.shapes = [];
                 state.includeMemoPage = false;
                 state.titleStyle = { ...DEFAULT_TITLE_STYLE };
                 state.dateStyle = { ...DEFAULT_DATE_STYLE };
