@@ -925,6 +925,126 @@
                 border-color: #fca5a5;
             }
         }
+
+        /* ====== 文字単位スタイルツールバー ====== */
+        #char-style-toolbar {
+            position: fixed;
+            z-index: 10000;
+            background: #1e293b;
+            border-radius: 10px;
+            padding: 5px 8px;
+            display: none;
+            align-items: center;
+            gap: 3px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.40);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            animation: cstFadeIn 0.12s ease;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            flex-wrap: wrap;
+            max-width: 340px;
+        }
+
+        #char-style-toolbar.visible {
+            display: flex;
+        }
+
+        @keyframes cstFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(4px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ツールバーの三角ポインタ（上向き） */
+        #char-style-toolbar::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: #1e293b;
+        }
+
+        .cst-divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            margin: 0 2px;
+            flex-shrink: 0;
+        }
+
+        .cst-btn {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.85);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: background 0.1s, color 0.1s;
+            line-height: 1.4;
+            white-space: nowrap;
+            -webkit-tap-highlight-color: transparent;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        .cst-btn:hover,
+        .cst-btn:active {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .cst-btn.cst-active {
+            background: #1A73E8;
+            color: white;
+        }
+
+        /* カラー小ドット */
+        .cst-color-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: transform 0.1s, border-color 0.1s;
+        }
+
+        .cst-color-dot:hover,
+        .cst-color-dot:active {
+            transform: scale(1.2);
+            border-color: white;
+        }
+
+        /* カラーピッカー（非表示・プログラムでtrigger） */
+        #cst-color-picker {
+            opacity: 0;
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            pointer-events: none;
+        }
+
+        /* プレビュー内テキストを選択可能にする */
+        [data-clickable-style] {
+            -webkit-user-select: text !important;
+            user-select: text !important;
+        }
+
+        /* キャプチャ時にツールバーを非表示 */
+        .is-capturing #char-style-toolbar {
+            display: none !important;
+        }
     </style>
 </head>
 
@@ -1283,6 +1403,7 @@
                 initSplitter();      // ★ スプリッターの初期化
                 initPinchZoom();     // ★ ピンチズームの初期化（iPhone）
                 initPreviewClickEdit(); // ★ プレビュークリック編集
+                initCharStyleEdit(); // ★ 文字単位スタイル編集の初期化
                 syncFormInputs();
                 renderItemsForm();
                 updatePreview();
@@ -2438,6 +2559,262 @@
                 }, { passive: true });
             }
 
+            // ====== ★ 文字単位スタイル編集 ======
+            function initCharStyleEdit() {
+                const toolbar = document.getElementById('char-style-toolbar');
+                if (!toolbar) return;
+
+                let _savedRange = null;  // 最後に保存した選択範囲
+
+                // ---- ツールバーを選択範囲の上または下に表示 ----
+                function showCharToolbar() {
+                    const sel = window.getSelection();
+                    if (!sel || sel.isCollapsed || !sel.rangeCount) { hideCharToolbar(); return; }
+                    const range = sel.getRangeAt(0);
+                    // プレビュー内のdata-clickable-style要素の中に選択範囲があるか確認
+                    const container = range.commonAncestorContainer;
+                    const inPreview = (container.nodeType === 3 ? container.parentElement : container)
+                        .closest('[data-clickable-style]');
+                    if (!inPreview) { hideCharToolbar(); return; }
+
+                    _savedRange = range.cloneRange();
+                    updateToolbarActiveState();
+
+                    const rects = range.getClientRects();
+                    if (!rects.length) return;
+                    const firstRect = rects[0];
+
+                    toolbar.classList.add('visible');
+                    const tw = toolbar.offsetWidth || 320;
+                    const th = toolbar.offsetHeight || 40;
+
+                    let top = firstRect.top - th - 14;
+                    let left = firstRect.left + (firstRect.width / 2) - (tw / 2);
+
+                    // 画面上部に収まらない場合は下に表示
+                    if (top < 8) top = firstRect.bottom + 8;
+                    // 横方向のはみ出し補正
+                    if (left < 8) left = 8;
+                    if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+                    // 画面下部のはみ出し補正
+                    if (top + th > window.innerHeight - 8) top = firstRect.top - th - 8;
+
+                    toolbar.style.left = left + 'px';
+                    toolbar.style.top = top + 'px';
+                }
+
+                function hideCharToolbar() {
+                    toolbar.classList.remove('visible');
+                    _savedRange = null;
+                }
+
+                // ---- ツールバーのアクティブ状態を現在選択範囲に合わせて更新 ----
+                function updateToolbarActiveState() {
+                    const isBold = document.queryCommandState('bold');
+                    const isItalic = document.queryCommandState('italic');
+                    const isUnderline = document.queryCommandState('underline');
+                    document.getElementById('cst-bold')?.classList.toggle('cst-active', isBold);
+                    document.getElementById('cst-italic')?.classList.toggle('cst-active', isItalic);
+                    document.getElementById('cst-underline')?.classList.toggle('cst-active', isUnderline);
+                }
+
+                // ---- 選択範囲を復元してからコマンドを実行 ----
+                function restoreSelectionAndExec(fn) {
+                    if (!_savedRange) return;
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(_savedRange);
+                    fn();
+                    // 実行後に選択範囲を再保存（範囲が変化する場合あり）
+                    if (sel.rangeCount) _savedRange = sel.getRangeAt(0).cloneRange();
+                    // 編集後のHTMLをstateに書き戻す
+                    savePreviewHTMLToState();
+                    showCharToolbar();
+                }
+
+                // ---- プレビューHTMLをstateに書き戻す ----
+                function savePreviewHTMLToState() {
+                    // タイトル
+                    const titleEl = document.querySelector('[data-view="title"]');
+                    if (titleEl) {
+                        state.title = titleEl.innerHTML;
+                    }
+                    // 日付
+                    const dateEl = document.querySelector('[data-view="date"]');
+                    if (dateEl) {
+                        state.date = dateEl.innerHTML;
+                    }
+                    // 見出し・本文（flow-block内）
+                    document.querySelectorAll('[data-clickable-style]').forEach(el => {
+                        const cid = el.dataset.clickableStyle;
+                        if (cid && cid.startsWith('heading_')) {
+                            const idx = parseInt(cid.split('_')[1]);
+                            if (state.items[idx]) {
+                                // 見出しテキスト本体（番号circleを除く）を保存
+                                // h2内の最後のテキストノード/spanを含むテキスト
+                                const spanCircle = el.querySelector('span[style*="background"]');
+                                const clone = el.cloneNode(true);
+                                const cSpan = clone.querySelector('span[style*="background"]');
+                                if (cSpan) cSpan.remove();
+                                state.items[idx].headingHTML = clone.innerHTML.trim();
+                            }
+                        } else if (cid && cid.startsWith('content_')) {
+                            const idx = parseInt(cid.split('_')[1]);
+                            if (state.items[idx]) {
+                                state.items[idx].contentHTML = el.innerHTML;
+                            }
+                        }
+                    });
+                }
+
+                // ---- PC: selection変化時にツールバーを表示 ----
+                document.addEventListener('selectionchange', () => {
+                    const sel = window.getSelection();
+                    if (!sel || sel.isCollapsed) {
+                        // ツールバー自体がフォーカスを持っている間は非表示にしない
+                        if (!toolbar.contains(document.activeElement) &&
+                            !toolbar.matches(':hover')) {
+                            // 少し待ってから非表示（ボタンクリック中の誤消去防止）
+                            setTimeout(() => {
+                                const s2 = window.getSelection();
+                                if (!s2 || s2.isCollapsed) hideCharToolbar();
+                            }, 150);
+                        }
+                        return;
+                    }
+                    // 選択中はツールバーを更新表示
+                    setTimeout(showCharToolbar, 10);
+                });
+
+                // ---- ★ カスタム文字色適用: spanでラップして選択範囲のみに適用 ----
+                // （execCommand('foreColor')はfontタグを生成するがCSSで親のstyle.colorに上書きされるため使用しない）
+                function applySpanColor(color) {
+                    if (!_savedRange) return;
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(_savedRange.cloneRange());
+                    const range = sel.getRangeAt(0);
+                    if (range.collapsed) return;
+
+                    // 対象がプレビュー内のクリック可能要素かを確認
+                    const container = range.commonAncestorContainer;
+                    const editEl = (container.nodeType === 3 ? container.parentElement : container)
+                        .closest('[data-clickable-style]');
+                    if (!editEl) return;
+
+                    try {
+                        // surroundContentsで単純にspanでラップ（選択範囲が単一テキストノードをまたぐ場合）
+                        const span = document.createElement('span');
+                        span.style.color = color;
+                        range.surroundContents(span);
+                        // 新しいspanの内容を選択状態にして範囲を更新
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(span);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        _savedRange = newRange.cloneRange();
+                    } catch (e) {
+                        // 複数の要素をまたぐ選択の場合: extractContentsして再挿入
+                        try {
+                            const fragment = range.extractContents();
+                            const span = document.createElement('span');
+                            span.style.color = color;
+                            span.appendChild(fragment);
+                            range.insertNode(span);
+                            const newRange = document.createRange();
+                            newRange.selectNodeContents(span);
+                            sel.removeAllRanges();
+                            sel.addRange(newRange);
+                            _savedRange = newRange.cloneRange();
+                        } catch (e2) {
+                            console.warn('applySpanColor: failed', e2);
+                        }
+                    }
+                    savePreviewHTMLToState();
+                    showCharToolbar();
+                }
+
+                // ---- ツールバーの各ボタンのイベント ----
+                // カラードット（プリセット色）
+                toolbar.querySelectorAll('.cst-color-dot[data-cst-color]').forEach(dot => {
+                    function applyColor(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        applySpanColor(dot.dataset.cstColor);
+                    }
+                    dot.addEventListener('mousedown', applyColor);
+                    dot.addEventListener('touchend', applyColor, { passive: false });
+                });
+
+                // カスタムカラーピッカー
+                const customBtn = document.getElementById('cst-custom-color-btn');
+                const colorPicker = document.getElementById('cst-color-picker');
+                if (customBtn && colorPicker) {
+                    customBtn.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        colorPicker.click();
+                    });
+                    customBtn.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        colorPicker.click();
+                    }, { passive: false });
+                    colorPicker.addEventListener('change', () => {
+                        applySpanColor(colorPicker.value);
+                    });
+                }
+
+                // 太字
+                document.getElementById('cst-bold')?.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => document.execCommand('bold'));
+                });
+                document.getElementById('cst-bold')?.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => document.execCommand('bold'));
+                }, { passive: false });
+
+                // 斜体
+                document.getElementById('cst-italic')?.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => document.execCommand('italic'));
+                });
+                document.getElementById('cst-italic')?.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => document.execCommand('italic'));
+                }, { passive: false });
+
+                // 下線
+                document.getElementById('cst-underline')?.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => document.execCommand('underline'));
+                });
+                document.getElementById('cst-underline')?.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => document.execCommand('underline'));
+                }, { passive: false });
+
+                // リセット（選択範囲のスタイルを除去）
+                document.getElementById('cst-reset')?.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => {
+                        document.execCommand('removeFormat');
+                    });
+                });
+                document.getElementById('cst-reset')?.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    restoreSelectionAndExec(() => {
+                        document.execCommand('removeFormat');
+                    });
+                }, { passive: false });
+
+                // ---- ツールバー外クリックで非表示（少し遅延して選択解除と区別） ----
+                document.addEventListener('mousedown', (e) => {
+                    if (!toolbar.contains(e.target) && !e.target.closest('[data-clickable-style]')) {
+                        hideCharToolbar();
+                    }
+                });
+            }
+
             // ====== スタイルパネルHTML生成ヘルパー ======
             function buildStylePanelHTML(id, styleObj, opts = {}) {
                 const { showFont = true, showAlign = false, label = 'テキストスタイル' } = opts;
@@ -2638,11 +3015,35 @@
             }
 
             function updatePreview() {
-                Object.keys(state).forEach(k => { if (k !== 'items' && k !== 'images' && k !== 'titleStyle' && k !== 'dateStyle') updatePreviewField(k); });
+                // タイトル・日付：HTMLかシンプルテキストか判別して反映
+                document.querySelectorAll('[data-view="title"]').forEach(el => {
+                    if (!el.isContentEditable) el.contentEditable = 'true';
+                    el.spellcheck = false;
+                    // すでに文字単位HTMLが保存されていればそれを使う
+                    if (state.title && state.title.includes('<')) {
+                        if (el.innerHTML !== state.title) el.innerHTML = state.title;
+                    } else {
+                        if (el.innerText !== (state.title || '')) el.innerText = state.title || '';
+                    }
+                    applyStyleToEl(el, state.titleStyle);
+                });
+                document.querySelectorAll('[data-view="date"]').forEach(el => {
+                    if (!el.isContentEditable) el.contentEditable = 'true';
+                    el.spellcheck = false;
+                    if (state.date && state.date.includes('<')) {
+                        if (el.innerHTML !== state.date) el.innerHTML = state.date;
+                    } else {
+                        if (el.innerText !== (state.date || '')) el.innerText = state.date || '';
+                    }
+                    applyStyleToEl(el, state.dateStyle);
+                });
 
-                // タイトル・日付スタイル反映
-                document.querySelectorAll('[data-view="title"]').forEach(el => applyStyleToEl(el, state.titleStyle));
-                document.querySelectorAll('[data-view="date"]').forEach(el => applyStyleToEl(el, state.dateStyle));
+                // その他フィールドはスキップ（タイトル・日付は上で処理済み）
+                Object.keys(state).forEach(k => {
+                    if (k === 'items' || k === 'images' || k === 'titleStyle' || k === 'dateStyle' || k === 'title' || k === 'date') return;
+                    updatePreviewField(k);
+                });
+
 
                 const flowArea = document.querySelector('[data-flow-area]');
                 if (flowArea) {
@@ -2663,16 +3064,45 @@
                         const headingInlineStyle = `color:${hs.color};font-size:${SIZE_MAP[hs.size]};font-weight:${hs.weight};font-family:${FONT_MAP[hs.font]};text-align:${hs.align || 'left'};border-left-color:${hs.color};`;
                         const contentInlineStyle = cs ? `color:${cs.color};font-size:${SIZE_MAP[cs.size]};font-weight:${cs.weight};font-family:${FONT_MAP[cs.font]};text-align:${cs.align || 'left'};` : '';;
 
+                        // ★ headingHTML があれば文字単位スタイルが付いたHTMLを優先使用
+                        const headingContent = item.headingHTML !== undefined
+                            ? item.headingHTML
+                            : (item.heading || '未入力');
+                        // ★ contentHTML があれば文字単位スタイルが付いたHTMLを優先使用
+                        const contentContent = item.contentHTML !== undefined
+                            ? item.contentHTML
+                            : (item.content || '');
+
                         block.innerHTML = `
                             <div class="density-pad">
-                                <h2 class="border-l-[3px] pl-3 mb-3 flex items-center gap-2" style="${headingInlineStyle}" data-clickable-style="heading_${i}">
-                                    <span class="text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0" style="background:${hs.color};">${i + 1}</span>
-                                    ${item.heading || '未入力'}
+                                <h2 class="border-l-[3px] pl-3 mb-3 flex items-center gap-2" style="${headingInlineStyle}" data-clickable-style="heading_${i}" contenteditable="true" spellcheck="false" data-placeholder="見出し">
+                                    <span class="text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0" style="background:${hs.color};" contenteditable="false">${i + 1}</span>
+                                    ${headingContent}
                                 </h2>
-                                ${item.content ? `<div class="leading-[1.8] whitespace-pre-wrap pl-5" style="${contentInlineStyle}" data-clickable-style="content_${i}">${item.content}</div>` : ''}
+                                ${(contentContent || item.content) ? `<div class="leading-[1.8] whitespace-pre-wrap pl-5" style="${contentInlineStyle}" data-clickable-style="content_${i}" contenteditable="true" spellcheck="false">${contentContent}</div>` : ''}
                                 ${memoHtml}
                             </div>`;
                         flowArea.appendChild(block);
+
+                        // ★ contenteditable の入力をstateに反映
+                        const h2El = block.querySelector(`[data-clickable-style="heading_${i}"]`);
+                        const divEl = block.querySelector(`[data-clickable-style="content_${i}"]`);
+                        if (h2El) {
+                            h2El.addEventListener('input', () => {
+                                const clone = h2El.cloneNode(true);
+                                const cSpan = clone.querySelector('span[contenteditable="false"]');
+                                if (cSpan) cSpan.remove();
+                                state.items[i].headingHTML = clone.innerHTML.trim();
+                                // プレーンテキストも更新（フォーム入力欄との同期用）
+                                state.items[i].heading = h2El.innerText.replace(/^\d+\s*/, '').trim();
+                            });
+                        }
+                        if (divEl) {
+                            divEl.addEventListener('input', () => {
+                                state.items[i].contentHTML = divEl.innerHTML;
+                                state.items[i].content = divEl.innerText;
+                            });
+                        }
                     });
 
                     // 汎用メモページはautoPaginate()後に独立したページとして追加するため、ここでは追加しない
@@ -3036,6 +3466,33 @@
             init();
         })();
     </script>
+
+    <!-- ★ 文字単位スタイルツールバー（テキスト選択時に表示） -->
+    <div id="char-style-toolbar">
+        <!-- プリセットカラー -->
+        <div class="cst-color-dot" title="黒" style="background:#1e293b;" data-cst-color="#1e293b"></div>
+        <div class="cst-color-dot" title="赤" style="background:#ef4444;" data-cst-color="#ef4444"></div>
+        <div class="cst-color-dot" title="青" style="background:#1A73E8;" data-cst-color="#1A73E8"></div>
+        <div class="cst-color-dot" title="緑" style="background:#16a34a;" data-cst-color="#16a34a"></div>
+        <div class="cst-color-dot" title="オレンジ" style="background:#ea580c;" data-cst-color="#ea580c"></div>
+        <div class="cst-color-dot" title="紫" style="background:#7c3aed;" data-cst-color="#7c3aed"></div>
+        <!-- カラーピッカートリガー -->
+        <div class="cst-color-dot" title="カスタム色" id="cst-custom-color-btn"
+            style="background: conic-gradient(red,yellow,lime,cyan,blue,magenta,red); border-color:rgba(255,255,255,0.6);">
+        </div>
+        <input type="color" id="cst-color-picker" value="#ff0000">
+        <div class="cst-divider"></div>
+        <!-- 太字 -->
+        <button class="cst-btn" id="cst-bold" title="太字" data-cst-cmd="bold"><b>B</b></button>
+        <!-- 斜体 -->
+        <button class="cst-btn" id="cst-italic" title="斜体" data-cst-cmd="italic"><i>I</i></button>
+        <!-- 下線 -->
+        <button class="cst-btn" id="cst-underline" title="下線" data-cst-cmd="underline"><u>U</u></button>
+        <div class="cst-divider"></div>
+        <!-- リセット -->
+        <button class="cst-btn" id="cst-reset" title="スタイルをリセット(選択範囲)">✕リセット</button>
+    </div>
+
 </body>
 
 </html>
