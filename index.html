@@ -1045,6 +1045,139 @@
         .is-capturing #char-style-toolbar {
             display: none !important;
         }
+
+        /* ====== テキストボックス ====== */
+        .draggable-text-wrapper {
+            position: absolute;
+            cursor: move;
+            border: 2px dashed transparent;
+            user-select: none;
+            border-radius: 4px;
+            transition: border-color 0.15s;
+            min-width: 60px;
+            min-height: 30px;
+            z-index: 48;
+        }
+
+        .draggable-text-wrapper:hover,
+        .draggable-text-wrapper.active {
+            border-color: #f59e0b;
+        }
+
+        .text-box-content {
+            width: 100%;
+            height: 100%;
+            outline: none;
+            background: transparent;
+            word-break: break-word;
+            white-space: pre-wrap;
+            cursor: text;
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            padding: 4px;
+            box-sizing: border-box;
+            line-height: 1.5;
+        }
+
+        /* テキストボックス削除ボタン */
+        .text-delete-btn {
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 44px;
+            height: 44px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .text-delete-btn::after {
+            content: '✕';
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            background: #f59e0b;
+            color: white;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+        }
+
+        /* テキストボックス リサイズハンドル */
+        .text-resize-handle {
+            position: absolute;
+            right: -16px;
+            bottom: -16px;
+            width: 44px;
+            height: 44px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+            cursor: se-resize;
+        }
+
+        .text-resize-handle::after {
+            content: '';
+            display: block;
+            width: 18px;
+            height: 18px;
+            background: #f59e0b;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+        }
+
+        .draggable-text-wrapper:hover .text-delete-btn,
+        .draggable-text-wrapper:hover .text-resize-handle,
+        .draggable-text-wrapper.active .text-delete-btn,
+        .draggable-text-wrapper.active .text-resize-handle {
+            display: flex;
+        }
+
+        /* モバイル: ボタンを大きく */
+        @media (max-width: 767px) {
+            .text-delete-btn {
+                top: -26px;
+                right: -26px;
+                width: 56px;
+                height: 56px;
+            }
+
+            .text-delete-btn::after {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+
+            .text-resize-handle {
+                right: -20px;
+                bottom: -20px;
+                width: 56px;
+                height: 56px;
+            }
+
+            .text-resize-handle::after {
+                width: 26px;
+                height: 26px;
+            }
+        }
+
+        /* キャプチャ時テキストボックスボタン非表示 */
+        .is-capturing .draggable-text-wrapper {
+            border-color: transparent !important;
+        }
+
+        .is-capturing .text-delete-btn,
+        .is-capturing .text-resize-handle {
+            display: none !important;
+        }
     </style>
 </head>
 
@@ -1200,6 +1333,35 @@
                             class="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-md font-bold text-xs hover:bg-slate-100 transition-all flex items-center justify-center gap-2 shadow-sm">
                             <i data-lucide="image-plus" class="w-4 h-4"></i> 画像をアップロード
                         </button>
+                    </div>
+
+                    <!-- テキストボックス挿入 -->
+                    <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-bold text-slate-600">テキストを配置（自由に移動・編集可）</span>
+                        </div>
+                        <button id="btn-add-textbox"
+                            class="w-full py-2 bg-white border border-slate-200 text-slate-600 rounded-md font-bold text-xs hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition-all flex items-center justify-center gap-2 shadow-sm">
+                            <i data-lucide="type" class="w-4 h-4"></i> テキストボックスを挿入
+                        </button>
+                        <div class="flex items-center gap-2 mt-2 flex-wrap">
+                            <label class="text-[10px] font-bold text-slate-500 whitespace-nowrap">初期サイズ</label>
+                            <select id="txt-init-size"
+                                class="text-[10px] border border-slate-200 rounded px-1 py-0.5 bg-white">
+                                <option value="12">12px</option>
+                                <option value="14" selected>14px</option>
+                                <option value="16">16px</option>
+                                <option value="18">18px</option>
+                                <option value="20">20px</option>
+                                <option value="24">24px</option>
+                            </select>
+                            <label class="text-[10px] font-bold text-slate-500 whitespace-nowrap ml-1">色</label>
+                            <input type="color" id="txt-init-color" value="#1e293b"
+                                class="w-7 h-7 rounded cursor-pointer border border-slate-200">
+                            <label class="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer">
+                                <input type="checkbox" id="txt-init-bold" class="w-3 h-3"> <b>太字</b>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- 図形挿入 -->
@@ -1370,7 +1532,8 @@
                     }
                 ],
                 images: [],
-                shapes: []
+                shapes: [],
+                textboxes: []
             };
 
             /* __INJECTED_DATA_START__ */ const __EMBEDDED_DATA__ = { "title": "月例開発チームミーティング アジェンダ", "date": "2026年2月26日", "includeMemoPage": false, "titleStyle": { "font": "sans", "color": "#1e293b", "size": "2xl", "weight": "900" }, "dateStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" }, "items": [{ "heading": "前回の振り返り", "content": "・新機能リリースの反響\n・発生した不具合の対応状況", "memoLines": 3, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }, { "heading": "今月の目標共有", "content": "・ユーザービリティ改善タスクの進行\n・技術負債の解消（リファクタリング計画）", "memoLines": 4, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }, { "heading": "各担当からの進捗報告", "content": "", "memoLines": 6, "headingStyle": { "font": "sans", "color": "#1e293b", "size": "base", "weight": "700" }, "contentStyle": { "font": "sans", "color": "#475569", "size": "sm", "weight": "400" } }], "images": [] }; /* __INJECTED_DATA_END__ */
@@ -1400,6 +1563,7 @@
                 attachEventListeners();
                 initImageEvents();
                 initShapeEvents();   // ★ 図形挿入の初期化
+                initTextboxEvents(); // ★ テキストボックスの初期化
                 initSplitter();      // ★ スプリッターの初期化
                 initPinchZoom();     // ★ ピンチズームの初期化（iPhone）
                 initPreviewClickEdit(); // ★ プレビュークリック編集
@@ -2571,10 +2735,10 @@
                     const sel = window.getSelection();
                     if (!sel || sel.isCollapsed || !sel.rangeCount) { hideCharToolbar(); return; }
                     const range = sel.getRangeAt(0);
-                    // プレビュー内のdata-clickable-style要素の中に選択範囲があるか確認
+                    // プレビュー内のdata-clickable-style要素またはテキストボックス内に選択範囲があるか確認
                     const container = range.commonAncestorContainer;
                     const inPreview = (container.nodeType === 3 ? container.parentElement : container)
-                        .closest('[data-clickable-style]');
+                        .closest('[data-clickable-style], .text-box-content');
                     if (!inPreview) { hideCharToolbar(); return; }
 
                     _savedRange = range.cloneRange();
@@ -2651,10 +2815,8 @@
                             const idx = parseInt(cid.split('_')[1]);
                             if (state.items[idx]) {
                                 // 見出しテキスト本体（番号circleを除く）を保存
-                                // h2内の最後のテキストノード/spanを含むテキスト
-                                const spanCircle = el.querySelector('span[style*="background"]');
                                 const clone = el.cloneNode(true);
-                                const cSpan = clone.querySelector('span[style*="background"]');
+                                const cSpan = clone.querySelector('span[contenteditable="false"]');
                                 if (cSpan) cSpan.remove();
                                 state.items[idx].headingHTML = clone.innerHTML.trim();
                             }
@@ -2664,6 +2826,14 @@
                                 state.items[idx].contentHTML = el.innerHTML;
                             }
                         }
+                    });
+                    // ★ テキストボックスのHTML保存
+                    document.querySelectorAll('.text-box-content').forEach(el => {
+                        const wrapper = el.closest('.draggable-text-wrapper');
+                        if (!wrapper) return;
+                        const id = wrapper.dataset.tbId;
+                        const tb = (state.textboxes || []).find(t => t.id === id);
+                        if (tb) tb.html = el.innerHTML;
                     });
                 }
 
@@ -2696,10 +2866,10 @@
                     const range = sel.getRangeAt(0);
                     if (range.collapsed) return;
 
-                    // 対象がプレビュー内のクリック可能要素かを確認
+                    // 対象がプレビュー内のクリック可能要素またはテキストボックスかを確認
                     const container = range.commonAncestorContainer;
                     const editEl = (container.nodeType === 3 ? container.parentElement : container)
-                        .closest('[data-clickable-style]');
+                        .closest('[data-clickable-style], .text-box-content');
                     if (!editEl) return;
 
                     try {
@@ -2805,6 +2975,82 @@
                     restoreSelectionAndExec(() => {
                         document.execCommand('removeFormat');
                     });
+                }, { passive: false });
+
+                // ---- ★ 文字単位サイズ変更 ----
+                function applySpanSize(sizePx) {
+                    if (!_savedRange) return;
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(_savedRange.cloneRange());
+                    const range = sel.getRangeAt(0);
+                    if (range.collapsed) return;
+
+                    const container = range.commonAncestorContainer;
+                    const editEl = (container.nodeType === 3 ? container.parentElement : container)
+                        .closest('[data-clickable-style], .text-box-content');
+                    if (!editEl) return;
+
+                    try {
+                        const span = document.createElement('span');
+                        span.style.fontSize = sizePx + 'px';
+                        range.surroundContents(span);
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(span);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        _savedRange = newRange.cloneRange();
+                    } catch (ex) {
+                        try {
+                            const fragment = range.extractContents();
+                            const span = document.createElement('span');
+                            span.style.fontSize = sizePx + 'px';
+                            span.appendChild(fragment);
+                            range.insertNode(span);
+                            const newRange = document.createRange();
+                            newRange.selectNodeContents(span);
+                            sel.removeAllRanges();
+                            sel.addRange(newRange);
+                            _savedRange = newRange.cloneRange();
+                        } catch (ex2) {
+                            console.warn('applySpanSize: failed', ex2);
+                        }
+                    }
+                    savePreviewHTMLToState();
+                    showCharToolbar();
+                }
+
+                // 現在の選択範囲の代表的なフォントサイズを取得
+                function getSelectionFontSizePx() {
+                    if (!_savedRange) return 14;
+                    const container = _savedRange.commonAncestorContainer;
+                    const el = container.nodeType === 3 ? container.parentElement : container;
+                    const cs = window.getComputedStyle(el);
+                    return parseFloat(cs.fontSize) || 14;
+                }
+
+                // A- ボタン（0.75倍、最小8px）
+                document.getElementById('cst-size-down')?.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    const cur = getSelectionFontSizePx();
+                    applySpanSize(Math.max(8, Math.round(cur * 0.8)));
+                });
+                document.getElementById('cst-size-down')?.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const cur = getSelectionFontSizePx();
+                    applySpanSize(Math.max(8, Math.round(cur * 0.8)));
+                }, { passive: false });
+
+                // A+ ボタン（1.25倍、最大96px）
+                document.getElementById('cst-size-up')?.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    const cur = getSelectionFontSizePx();
+                    applySpanSize(Math.min(96, Math.round(cur * 1.25)));
+                });
+                document.getElementById('cst-size-up')?.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const cur = getSelectionFontSizePx();
+                    applySpanSize(Math.min(96, Math.round(cur * 1.25)));
                 }, { passive: false });
 
                 // ---- ツールバー外クリックで非表示（少し遅延して選択解除と区別） ----
@@ -3112,6 +3358,7 @@
                 addMemoPageIfNeeded();
                 renderImages();
                 renderShapes();
+                renderTextboxes();
                 autoAdjustDensity();
             }
 
@@ -3338,12 +3585,13 @@
             }
 
             function handleClearForm() {
-                if (!confirm('入力した内容と挿入された画像・図形をすべて消去します。よろしいですか？')) return;
+                if (!confirm('入力した内容と挿入された画像・図形・テキストをすべて消去します。よろしいですか？')) return;
                 state.title = '';
                 state.date = '';
                 state.items = [];
                 state.images = [];
                 state.shapes = [];
+                state.textboxes = [];
                 state.includeMemoPage = false;
                 state.titleStyle = { ...DEFAULT_TITLE_STYLE };
                 state.dateStyle = { ...DEFAULT_DATE_STYLE };
@@ -3463,6 +3711,220 @@
                 setTimeout(() => el.classList.add('hidden'), 4000);
             }
 
+            // ====== ★ テキストボックス挿入・描画・操作ロジック ======
+            let _selectedTextboxId = null;
+            let _isTxtDragging = false;
+            let _isTxtResizing = false;
+            let _currentActiveTxt = null;
+            let _txtStartX, _txtStartY, _txtStartLeft, _txtStartTop, _txtStartW, _txtStartH;
+
+            function initTextboxEvents() {
+                const btnAdd = document.getElementById('btn-add-textbox');
+                if (btnAdd) {
+                    btnAdd.addEventListener('click', insertTextbox);
+                    btnAdd.addEventListener('touchend', (e) => { e.preventDefault(); insertTextbox(); }, { passive: false });
+                }
+
+                // グローバルドラッグ追跡（画像/図形と同じパターン）
+                function onGlobalTxtMove(e) {
+                    if (!_isTxtDragging && !_isTxtResizing || !_currentActiveTxt) return;
+                    const pos = getPointerPos(e);
+                    const dx = (pos.x - _txtStartX) / currentScale;
+                    const dy = (pos.y - _txtStartY) / currentScale;
+                    if (_isTxtDragging) {
+                        _currentActiveTxt.style.left = `${_txtStartLeft + dx}px`;
+                        _currentActiveTxt.style.top = `${_txtStartTop + dy}px`;
+                    } else if (_isTxtResizing) {
+                        _currentActiveTxt.style.width = `${Math.max(60, _txtStartW + dx)}px`;
+                        _currentActiveTxt.style.height = `${Math.max(30, _txtStartH + dy)}px`;
+                    }
+                    if (e.cancelable) e.preventDefault();
+                }
+
+                function onGlobalTxtUp(e) {
+                    if (!_isTxtDragging && !_isTxtResizing) return;
+                    const pos = getPointerPos(e);
+                    const movedX = Math.abs(pos.x - _txtStartX);
+                    const movedY = Math.abs(pos.y - _txtStartY);
+                    const isTap = movedX < 8 && movedY < 8;
+
+                    if (_currentActiveTxt && !isTap) {
+                        const id = _currentActiveTxt.dataset.tbId;
+                        const tb = (state.textboxes || []).find(t => t.id === id);
+                        if (tb) {
+                            let newLeft = parseFloat(_currentActiveTxt.style.left);
+                            let newTop = parseFloat(_currentActiveTxt.style.top);
+                            tb.width = parseFloat(_currentActiveTxt.style.width);
+                            tb.height = parseFloat(_currentActiveTxt.style.height);
+                            let pg = tb.page || 0;
+                            const ph = currentPageSize.h;
+                            if (newTop > ph) { const s = Math.floor(newTop / ph); pg += s; newTop -= ph * s; }
+                            else if (newTop < 0 && pg > 0) { const s = Math.ceil(Math.abs(newTop) / ph); pg = Math.max(0, pg - s); newTop += ph * s; }
+                            tb.x = newLeft; tb.y = newTop; tb.page = pg;
+                        }
+                        updatePreview();
+                    }
+                    _isTxtDragging = false;
+                    _isTxtResizing = false;
+                    _currentActiveTxt = null;
+                }
+
+                window.addEventListener('mousemove', onGlobalTxtMove);
+                window.addEventListener('mouseup', onGlobalTxtUp);
+                window.addEventListener('touchmove', onGlobalTxtMove, { passive: false });
+                window.addEventListener('touchend', onGlobalTxtUp);
+
+                // プレビュー外クリックで選択解除
+                const pc = document.getElementById('preview-container');
+                pc.addEventListener('mousedown', (e) => {
+                    if (!e.target.closest('.draggable-text-wrapper')) {
+                        _selectedTextboxId = null;
+                        renderTextboxes();
+                    }
+                });
+                pc.addEventListener('touchstart', (e) => {
+                    if (!e.target.closest('.draggable-text-wrapper')) {
+                        _selectedTextboxId = null;
+                        renderTextboxes();
+                    }
+                }, { passive: true });
+            }
+
+            function insertTextbox() {
+                const fontSize = parseInt(document.getElementById('txt-init-size')?.value || '14');
+                const color = document.getElementById('txt-init-color')?.value || '#1e293b';
+                const bold = document.getElementById('txt-init-bold')?.checked || false;
+                if (!state.textboxes) state.textboxes = [];
+                const tb = {
+                    id: 'tb_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                    x: 120, y: 200,
+                    width: 200, height: 60,
+                    page: 0,
+                    html: 'テキストを入力',
+                    fontSize: fontSize,
+                    color: color,
+                    bold: bold
+                };
+                state.textboxes.push(tb);
+                _selectedTextboxId = tb.id;
+                renderTextboxes();
+                showNotification('テキストボックスを挿入しました', 'success');
+            }
+
+            function renderTextboxes() {
+                // 既存のテキストレイヤーをクリア
+                document.querySelectorAll('.text-layer').forEach(l => l.innerHTML = '');
+                // text-layerが存在しないページに作成
+                document.querySelectorAll('.pdf-page').forEach(page => {
+                    let tl = page.querySelector('.text-layer');
+                    if (!tl) {
+                        tl = document.createElement('div');
+                        tl.className = 'text-layer absolute inset-0 pointer-events-none';
+                        tl.style.zIndex = '46';
+                        page.appendChild(tl);
+                    }
+                    tl.innerHTML = '';
+                });
+
+                if (!state.textboxes || !state.textboxes.length) return;
+                const totalPages = document.querySelectorAll('.pdf-page').length;
+
+                state.textboxes.forEach(tb => {
+                    const pageIndex = Math.min(tb.page || 0, totalPages - 1);
+                    const targetPage = document.querySelector(`.pdf-page[data-page="${pageIndex}"]`);
+                    if (!targetPage) return;
+                    const tl = targetPage.querySelector('.text-layer');
+                    if (!tl) return;
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'draggable-text-wrapper pointer-events-auto' +
+                        (tb.id === _selectedTextboxId ? ' active' : '');
+                    wrapper.dataset.tbId = tb.id;
+                    wrapper.style.cssText =
+                        `left:${tb.x}px;top:${tb.y}px;` +
+                        `width:${tb.width}px;height:${tb.height}px;touch-action:none;`;
+
+                    // テキスト内容（contenteditable）
+                    const content = document.createElement('div');
+                    content.className = 'text-box-content';
+                    content.contentEditable = 'true';
+                    content.spellcheck = false;
+                    content.style.fontSize = tb.fontSize + 'px';
+                    content.style.color = tb.color;
+                    content.style.fontWeight = tb.bold ? '700' : '400';
+                    // テキスト選択・編集を可能にするためtouch-actionを auto に
+                    content.style.touchAction = 'auto';
+                    content.style.userSelect = 'text';
+                    content.style.webkitUserSelect = 'text';
+                    if (tb.html && tb.html.includes('<')) {
+                        content.innerHTML = tb.html;
+                    } else {
+                        content.innerText = tb.html || '';
+                    }
+                    // テキスト編集時にstateに保存
+                    content.addEventListener('input', () => { tb.html = content.innerHTML; });
+                    // テキスト内クリック: マウスはドラッグを阻止（カーソル移動のため）
+                    // タッチは伝播させる（iPhoneでのテキスト選択のため stopPropagation しない）
+                    content.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+
+                    // 削除ボタン
+                    const deleteBtn = document.createElement('div');
+                    deleteBtn.className = 'text-delete-btn';
+                    function doTxtDelete(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        _isTxtDragging = false; _isTxtResizing = false; _currentActiveTxt = null;
+                        _selectedTextboxId = null;
+                        state.textboxes = state.textboxes.filter(t => t.id !== tb.id);
+                        renderTextboxes();
+                    }
+                    deleteBtn.addEventListener('touchstart', doTxtDelete, { passive: false });
+                    deleteBtn.addEventListener('mousedown', doTxtDelete);
+
+                    // リサイズハンドル
+                    const resizeHandle = document.createElement('div');
+                    resizeHandle.className = 'text-resize-handle';
+                    function onTxtResizeStart(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        _isTxtResizing = true; _isTxtDragging = false;
+                        _currentActiveTxt = wrapper;
+                        _selectedTextboxId = tb.id;
+                        const pos = getPointerPos(e);
+                        _txtStartX = pos.x; _txtStartY = pos.y;
+                        _txtStartW = parseFloat(wrapper.style.width);
+                        _txtStartH = parseFloat(wrapper.style.height);
+                    }
+                    resizeHandle.addEventListener('touchstart', onTxtResizeStart, { passive: false });
+                    resizeHandle.addEventListener('mousedown', onTxtResizeStart);
+
+                    // ラッパードラッグ（テキスト以外の部分でドラッグ）
+                    function onTxtWrapperStart(e) {
+                        if (e.target === content || e.target.closest('.text-box-content')) return;
+                        if (e.target === deleteBtn || e.target === resizeHandle) return;
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        _isTxtDragging = true; _isTxtResizing = false;
+                        _currentActiveTxt = wrapper;
+                        _selectedTextboxId = tb.id;
+                        const pos = getPointerPos(e);
+                        _txtStartX = pos.x; _txtStartY = pos.y;
+                        _txtStartLeft = parseFloat(wrapper.style.left);
+                        _txtStartTop = parseFloat(wrapper.style.top);
+                        // 選択状態を即反映
+                        document.querySelectorAll('.draggable-text-wrapper').forEach(w => w.classList.remove('active'));
+                        wrapper.classList.add('active');
+                    }
+                    wrapper.addEventListener('touchstart', onTxtWrapperStart, { passive: false });
+                    wrapper.addEventListener('mousedown', onTxtWrapperStart);
+
+                    wrapper.appendChild(content);
+                    wrapper.appendChild(deleteBtn);
+                    wrapper.appendChild(resizeHandle);
+                    tl.appendChild(wrapper);
+                });
+            }
+
             init();
         })();
     </script>
@@ -3481,6 +3943,10 @@
             style="background: conic-gradient(red,yellow,lime,cyan,blue,magenta,red); border-color:rgba(255,255,255,0.6);">
         </div>
         <input type="color" id="cst-color-picker" value="#ff0000">
+        <div class="cst-divider"></div>
+        <!-- サイズ縮小/拡大 -->
+        <button class="cst-btn" id="cst-size-down" title="文字を小さく" style="font-size:10px;">A-</button>
+        <button class="cst-btn" id="cst-size-up" title="文字を大きく" style="font-size:14px;">A+</button>
         <div class="cst-divider"></div>
         <!-- 太字 -->
         <button class="cst-btn" id="cst-bold" title="太字" data-cst-cmd="bold"><b>B</b></button>
