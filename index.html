@@ -848,6 +848,40 @@
                 transform: scale(1) translateY(0);
             }
         }
+
+        /* ====== モバイル専用クリアボタン ====== */
+        #mobile-clear-btn {
+            display: none;
+            /* デスクトップでは非表示 */
+        }
+
+        @media (max-width: 767px) {
+            #mobile-clear-btn {
+                display: flex;
+                width: 100%;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding: 10px 16px;
+                background: white;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: 700;
+                color: #64748b;
+                cursor: pointer;
+                transition: background 0.15s, color 0.15s, border-color 0.15s;
+                -webkit-tap-highlight-color: transparent;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+                margin-bottom: 4px;
+            }
+
+            #mobile-clear-btn:active {
+                background: #fff1f2;
+                color: #ef4444;
+                border-color: #fca5a5;
+            }
+        }
     </style>
 </head>
 
@@ -951,6 +985,10 @@
             </div>
 
             <div id="form-container" class="space-y-6">
+                <!-- ★ モバイル専用クリアボタン（iPhoneのみ表示） -->
+                <button id="mobile-clear-btn" type="button">
+                    🗑️ 様式をクリア
+                </button>
                 <!-- 基本情報 -->
                 <section class="space-y-3">
                     <h3 class="section-label">
@@ -1222,6 +1260,13 @@
                 document.getElementById('btn-download').addEventListener('click', handleDownloadPDF);
                 document.getElementById('btn-clear-form').addEventListener('click', handleClearForm);
                 document.getElementById('btn-open-newtab').addEventListener('click', handleOpenNewTab);
+
+                // ★ モバイル専用クリアボタン（iPhoneのみ表示）
+                const mobileClearBtn = document.getElementById('mobile-clear-btn');
+                if (mobileClearBtn) {
+                    mobileClearBtn.addEventListener('click', handleClearForm);
+                    mobileClearBtn.addEventListener('touchend', (e) => { e.preventDefault(); handleClearForm(); }, { passive: false });
+                }
 
                 document.getElementById('btn-zoom-in').addEventListener('click', () => adjustZoom(Math.min(currentScale + 0.1, 2)));
                 document.getElementById('btn-zoom-out').addEventListener('click', () => adjustZoom(Math.max(currentScale - 0.1, 0.3)));
