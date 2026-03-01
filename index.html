@@ -1175,8 +1175,176 @@
         }
 
         .is-capturing .text-delete-btn,
-        .is-capturing .text-resize-handle {
+        .is-capturing .text-resize-handle,
+        .is-capturing .text-drag-handle {
             display: none !important;
+        }
+
+        /* ====== テキストボックス ドラッグハンドル ====== */
+        .text-drag-handle {
+            position: absolute;
+            top: -28px;
+            left: 0;
+            right: 0;
+            height: 24px;
+            background: #f59e0b;
+            border-radius: 6px 6px 0 0;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 6px;
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .text-drag-handle:active {
+            cursor: grabbing;
+        }
+
+        /* ドラッグアイコン */
+        .text-drag-label {
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            letter-spacing: 1px;
+            pointer-events: none;
+        }
+
+        /* 編集ボタン */
+        .text-edit-btn {
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 7px;
+            cursor: pointer;
+            font-weight: bold;
+            touch-action: manipulation;
+            flex-shrink: 0;
+            line-height: 1.4;
+        }
+
+        .text-edit-btn:hover {
+            background: rgba(255, 255, 255, 0.45);
+        }
+
+        .draggable-text-wrapper:hover .text-drag-handle,
+        .draggable-text-wrapper.active .text-drag-handle {
+            display: flex;
+        }
+
+        @media (max-width: 767px) {
+            .text-drag-handle {
+                top: -36px;
+                height: 32px;
+                font-size: 13px;
+            }
+
+            .text-edit-btn {
+                font-size: 13px;
+                padding: 3px 10px;
+            }
+        }
+
+        /* ====== テキストボックス スタイル編集パネル ====== */
+        .textbox-style-panel {
+            position: fixed;
+            background: #1e293b;
+            color: white;
+            border-radius: 12px;
+            padding: 14px 16px;
+            min-width: 260px;
+            max-width: 320px;
+            z-index: 10000;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            font-size: 12px;
+        }
+
+        .textbox-style-panel h4 {
+            font-size: 12px;
+            font-weight: bold;
+            color: #94a3b8;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .tbsp-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .tbsp-label {
+            font-size: 11px;
+            color: #94a3b8;
+            width: 44px;
+            flex-shrink: 0;
+        }
+
+        .tbsp-row select,
+        .tbsp-row input[type="number"] {
+            flex: 1;
+            background: #334155;
+            border: 1px solid #475569;
+            color: white;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        .tbsp-row input[type="color"] {
+            width: 36px;
+            height: 28px;
+            border-radius: 6px;
+            border: 2px solid #475569;
+            cursor: pointer;
+            background: none;
+        }
+
+        .tbsp-toggle-btn {
+            flex: 1;
+            padding: 4px 8px;
+            background: #334155;
+            border: 1px solid #475569;
+            color: #cbd5e1;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .tbsp-toggle-btn.active {
+            background: #f59e0b;
+            border-color: #f59e0b;
+            color: white;
+        }
+
+        .tbsp-close-btn {
+            width: 100%;
+            margin-top: 10px;
+            padding: 7px;
+            background: #475569;
+            border: none;
+            color: white;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .tbsp-close-btn:hover {
+            background: #64748b;
+        }
+
+        /* テキストボックス「編集中」ハイライト */
+        .draggable-text-wrapper.editing .text-box-content {
+            border: 2px solid #3b82f6;
+            border-radius: 3px;
+            background: rgba(59, 130, 246, 0.04);
         }
     </style>
 </head>
@@ -1226,7 +1394,8 @@
                             <div class="page-inner flex flex-col h-full p-[50px]">
                                 <div class="mb-6">
                                     <div class="flex justify-end mb-4 text-sm text-slate-600">
-                                        <span data-view="date" class="whitespace-nowrap">2026年2月26日</span>
+                                        <span data-view="date" data-clickable-style="date"
+                                            class="whitespace-nowrap">2026年2月26日</span>
                                     </div>
                                     <h1 class="tracking-widest border-b-2 pb-3 mb-2" data-view="title"
                                         data-clickable-style="title" style="cursor:pointer;">月例開発チームミーティング アジェンダ</h1>
@@ -3053,9 +3222,73 @@
                     applySpanSize(Math.min(96, Math.round(cur * 1.25)));
                 }, { passive: false });
 
+                // ---- ★ 書体（フォントファミリー）変更 ----
+                function applySpanFont(fontFamily) {
+                    if (!_savedRange || !fontFamily) return;
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(_savedRange.cloneRange());
+                    const range = sel.getRangeAt(0);
+                    if (range.collapsed) return;
+
+                    const container = range.commonAncestorContainer;
+                    const editEl = (container.nodeType === 3 ? container.parentElement : container)
+                        .closest('[data-clickable-style], .text-box-content');
+                    if (!editEl) return;
+
+                    try {
+                        const span = document.createElement('span');
+                        span.style.fontFamily = fontFamily;
+                        range.surroundContents(span);
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(span);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        _savedRange = newRange.cloneRange();
+                    } catch (ex) {
+                        try {
+                            const fragment = range.extractContents();
+                            const span = document.createElement('span');
+                            span.style.fontFamily = fontFamily;
+                            span.appendChild(fragment);
+                            range.insertNode(span);
+                            const newRange = document.createRange();
+                            newRange.selectNodeContents(span);
+                            sel.removeAllRanges();
+                            sel.addRange(newRange);
+                            _savedRange = newRange.cloneRange();
+                        } catch (ex2) {
+                            console.warn('applySpanFont: failed', ex2);
+                        }
+                    }
+                    savePreviewHTMLToState();
+                    showCharToolbar();
+                    // セレクトを先頭（プレースホルダ）に戻す
+                    const fontSel = document.getElementById('cst-font');
+                    if (fontSel) fontSel.selectedIndex = 0;
+                }
+
+                // 書体セレクタ: mousedown で選択範囲を保存、change で適用
+                const fontSelect = document.getElementById('cst-font');
+                if (fontSelect) {
+                    fontSelect.addEventListener('mousedown', () => {
+                        // ドロップダウンを開く前に選択範囲を保存（フォーカス移動前）
+                        // _savedRange は既に直前の selectionchange で保存済みのため追加作業不要
+                    });
+                    fontSelect.addEventListener('change', (e) => {
+                        applySpanFont(e.target.value);
+                    });
+                    // タッチ端末
+                    fontSelect.addEventListener('touchend', () => {
+                        if (fontSelect.value) applySpanFont(fontSelect.value);
+                    }, { passive: true });
+                }
+
                 // ---- ツールバー外クリックで非表示（少し遅延して選択解除と区別） ----
                 document.addEventListener('mousedown', (e) => {
-                    if (!toolbar.contains(e.target) && !e.target.closest('[data-clickable-style]')) {
+                    if (!toolbar.contains(e.target) &&
+                        !e.target.closest('[data-clickable-style]') &&
+                        !e.target.closest('.text-box-content')) {
                         hideCharToolbar();
                     }
                 });
@@ -3898,10 +4131,33 @@
                     resizeHandle.addEventListener('touchstart', onTxtResizeStart, { passive: false });
                     resizeHandle.addEventListener('mousedown', onTxtResizeStart);
 
-                    // ラッパードラッグ（テキスト以外の部分でドラッグ）
-                    function onTxtWrapperStart(e) {
-                        if (e.target === content || e.target.closest('.text-box-content')) return;
-                        if (e.target === deleteBtn || e.target === resizeHandle) return;
+                    // ====== ドラッグハンドル（上部バー）======
+                    const dragHandle = document.createElement('div');
+                    dragHandle.className = 'text-drag-handle';
+
+                    // ラベル
+                    const dragLabel = document.createElement('span');
+                    dragLabel.className = 'text-drag-label';
+                    dragLabel.textContent = '⠷ 移動';
+                    dragHandle.appendChild(dragLabel);
+
+                    // 編集ボタン
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'text-edit-btn';
+                    editBtn.textContent = '✏ 編集';
+                    editBtn.type = 'button';
+                    function onEditBtnClick(e) {
+                        e.stopPropagation();
+                        if (e.cancelable) e.preventDefault();
+                        openTextboxStylePanel(tb, wrapper, content);
+                    }
+                    editBtn.addEventListener('mousedown', onEditBtnClick);
+                    editBtn.addEventListener('touchend', onEditBtnClick, { passive: false });
+                    dragHandle.appendChild(editBtn);
+
+                    function onTxtDragHandleStart(e) {
+                        // 編集ボタンがクリックされた場合はドラッグしない
+                        if (e.target.closest('.text-edit-btn')) return;
                         e.stopPropagation();
                         if (e.cancelable) e.preventDefault();
                         _isTxtDragging = true; _isTxtResizing = false;
@@ -3915,14 +4171,184 @@
                         document.querySelectorAll('.draggable-text-wrapper').forEach(w => w.classList.remove('active'));
                         wrapper.classList.add('active');
                     }
-                    wrapper.addEventListener('touchstart', onTxtWrapperStart, { passive: false });
-                    wrapper.addEventListener('mousedown', onTxtWrapperStart);
+                    dragHandle.addEventListener('touchstart', onTxtDragHandleStart, { passive: false });
+                    dragHandle.addEventListener('mousedown', onTxtDragHandleStart);
 
+                    // ラッパークリック: 選択状態にするのみ（ドラッグはハンドル専用）
+                    wrapper.addEventListener('mousedown', (e) => {
+                        if (e.target === content || e.target.closest('.text-box-content')) return;
+                        if (e.target === deleteBtn || e.target === resizeHandle || e.target === dragHandle) return;
+                        _selectedTextboxId = tb.id;
+                        document.querySelectorAll('.draggable-text-wrapper').forEach(w => w.classList.remove('active'));
+                        wrapper.classList.add('active');
+                    });
+                    wrapper.addEventListener('touchstart', (e) => {
+                        if (e.target === deleteBtn || e.target === resizeHandle || e.target === dragHandle) return;
+                        if (e.target.closest('.text-drag-handle')) return;
+                        _selectedTextboxId = tb.id;
+                        document.querySelectorAll('.draggable-text-wrapper').forEach(w => w.classList.remove('active'));
+                        wrapper.classList.add('active');
+                    }, { passive: true });
+
+                    wrapper.appendChild(dragHandle);
                     wrapper.appendChild(content);
                     wrapper.appendChild(deleteBtn);
                     wrapper.appendChild(resizeHandle);
                     tl.appendChild(wrapper);
                 });
+            }
+            // ====== ★ テキストボックス スタイル編集パネル ======
+            function openTextboxStylePanel(tb, wrapper, contentEl) {
+                // 既存パネルを削除
+                document.querySelectorAll('.textbox-style-panel').forEach(p => p.remove());
+
+                // 編集モード：コンテンツにフォーカス
+                wrapper.classList.add('editing', 'active');
+                _selectedTextboxId = tb.id;
+                setTimeout(() => { contentEl.focus(); }, 50);
+
+                const panel = document.createElement('div');
+                panel.className = 'textbox-style-panel';
+
+                const fonts = [
+                    { v: 'sans', t: 'Noto Sans' }, { v: 'serif', t: 'Noto Serif' },
+                    { v: 'meiryo', t: 'メイリオ' }, { v: 'rounded', t: '丸ゴシック' },
+                    { v: 'gothic', t: 'MSゴシック' }, { v: 'mincho', t: '明朝' }
+                ];
+
+                panel.innerHTML = `
+                    <h4>✏ テキストボックスの設定</h4>
+                    <div class="tbsp-row">
+                        <span class="tbsp-label">テキスト</span>
+                        <input type="text" id="tbsp-text-input" value="" placeholder="テキストを入力"
+                            style="flex:1;background:#334155;border:1px solid #475569;color:white;border-radius:6px;padding:4px 8px;font-size:12px;">
+                    </div>
+                    <div class="tbsp-row">
+                        <span class="tbsp-label">サイズ</span>
+                        <input type="number" id="tbsp-size" value="${tb.fontSize}" min="8" max="96" step="1">
+                    </div>
+                    <div class="tbsp-row">
+                        <span class="tbsp-label">色</span>
+                        <input type="color" id="tbsp-color" value="${tb.color}">
+                        <span id="tbsp-color-txt" style="font-size:10px;color:#94a3b8;">${tb.color}</span>
+                    </div>
+                    <div class="tbsp-row">
+                        <span class="tbsp-label">太さ</span>
+                        <button class="tbsp-toggle-btn${tb.bold ? ' active' : ''}" id="tbsp-bold">🌙 太字</button>
+                        <button class="tbsp-toggle-btn" id="tbsp-italic-btn" style="font-style:italic">I 斜体</button>
+                    </div>
+                    <div class="tbsp-row">
+                        <span class="tbsp-label">書体</span>
+                        <select id="tbsp-font">
+                            ${fonts.map(f => `<option value="${f.v}"${tb.fontFamily === f.v ? ' selected' : ''}>${f.t}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="tbsp-row">
+                        <span class="tbsp-label">揃え</span>
+                        <button class="tbsp-toggle-btn${(tb.align || 'left') === 'left' ? ' active' : ''}" data-tbsp-align="left">≡◄</button>
+                        <button class="tbsp-toggle-btn${(tb.align || 'left') === 'center' ? ' active' : ''}" data-tbsp-align="center">≡</button>
+                        <button class="tbsp-toggle-btn${(tb.align || 'left') === 'right' ? ' active' : ''}" data-tbsp-align="right">►≡</button>
+                    </div>
+                    <button class="tbsp-close-btn" id="tbsp-close">✔ 適用して閉じる</button>
+                `;
+
+                // テキスト入力欄に現在のプレーンテキストを初期値に
+                const txtInput = panel.querySelector('#tbsp-text-input');
+                txtInput.value = contentEl.innerText || '';
+
+                // 位置: wrapperの左上の場所近く
+                document.body.appendChild(panel);
+                const wr = wrapper.getBoundingClientRect();
+                let pLeft = wr.left;
+                let pTop = wr.top - panel.offsetHeight - 30;
+                if (pTop < 10) pTop = wr.bottom + 30;
+                if (pLeft + 280 > window.innerWidth) pLeft = window.innerWidth - 290;
+                panel.style.left = `${Math.max(10, pLeft)}px`;
+                panel.style.top = `${pTop}px`;
+
+                // テキスト入力 -> contentEl に反映
+                txtInput.addEventListener('input', () => {
+                    // 既存のスパン等を消してプレーンテキストに置换
+                    contentEl.innerText = txtInput.value;
+                    tb.html = contentEl.innerHTML;
+                });
+
+                // サイズ
+                panel.querySelector('#tbsp-size').addEventListener('input', (e) => {
+                    tb.fontSize = Math.max(8, Math.min(96, parseInt(e.target.value) || 14));
+                    contentEl.style.fontSize = tb.fontSize + 'px';
+                });
+
+                // 色
+                const colorInput = panel.querySelector('#tbsp-color');
+                const colorTxt = panel.querySelector('#tbsp-color-txt');
+                colorInput.addEventListener('input', () => {
+                    tb.color = colorInput.value;
+                    contentEl.style.color = tb.color;
+                    colorTxt.textContent = tb.color;
+                });
+
+                // 太字
+                const boldBtn = panel.querySelector('#tbsp-bold');
+                boldBtn.addEventListener('click', () => {
+                    tb.bold = !tb.bold;
+                    boldBtn.classList.toggle('active', tb.bold);
+                    contentEl.style.fontWeight = tb.bold ? '700' : '400';
+                });
+
+                // 斜体
+                const italicBtn = panel.querySelector('#tbsp-italic-btn');
+                italicBtn.addEventListener('click', () => {
+                    const isItalic = contentEl.style.fontStyle === 'italic';
+                    contentEl.style.fontStyle = isItalic ? '' : 'italic';
+                    italicBtn.classList.toggle('active', !isItalic);
+                });
+
+                // 書体
+                const FONT_MAP_TB = {
+                    'sans': "'Noto Sans JP', sans-serif",
+                    'serif': "'Noto Serif JP', serif",
+                    'meiryo': "'Meiryo UI', Meiryo, 'MS PGothic', sans-serif",
+                    'rounded': "'M PLUS Rounded 1c', 'Noto Sans JP', sans-serif",
+                    'gothic': "'MS Gothic', 'MS PGothic', 'Noto Sans JP', monospace",
+                    'mincho': "'Sawarabi Mincho', 'Noto Serif JP', serif"
+                };
+                panel.querySelector('#tbsp-font').addEventListener('change', (e) => {
+                    tb.fontFamily = e.target.value;
+                    contentEl.style.fontFamily = FONT_MAP_TB[e.target.value] || '';
+                });
+
+                // 揃え
+                panel.querySelectorAll('[data-tbsp-align]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        tb.align = btn.dataset.tbspAlign;
+                        contentEl.style.textAlign = tb.align;
+                        panel.querySelectorAll('[data-tbsp-align]').forEach(b =>
+                            b.classList.toggle('active', b.dataset.tbspAlign === tb.align));
+                    });
+                });
+
+                // 適用して閉じる
+                panel.querySelector('#tbsp-close').addEventListener('click', () => {
+                    wrapper.classList.remove('editing');
+                    panel.remove();
+                });
+                panel.querySelector('#tbsp-close').addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    wrapper.classList.remove('editing');
+                    panel.remove();
+                }, { passive: false });
+
+                // パネル外クリックで閉じる
+                setTimeout(() => {
+                    document.addEventListener('mousedown', function closePanelHandler(e) {
+                        if (!panel.contains(e.target) && !wrapper.contains(e.target)) {
+                            wrapper.classList.remove('editing');
+                            panel.remove();
+                            document.removeEventListener('mousedown', closePanelHandler);
+                        }
+                    });
+                }, 200);
             }
 
             init();
@@ -3947,6 +4373,19 @@
         <!-- サイズ縮小/拡大 -->
         <button class="cst-btn" id="cst-size-down" title="文字を小さく" style="font-size:10px;">A-</button>
         <button class="cst-btn" id="cst-size-up" title="文字を大きく" style="font-size:14px;">A+</button>
+        <div class="cst-divider"></div>
+        <!-- 書体変更 -->
+        <select id="cst-font" title="書体"
+            style="background:#334155;color:white;border:none;border-radius:5px;padding:2px 4px;font-size:11px!important;max-width:80px;cursor:pointer;">
+            <option value="">Aa書体</option>
+            <option value="'Noto Sans JP', sans-serif">Noto Sans</option>
+            <option value="'Noto Serif JP', serif">Noto Serif</option>
+            <option value="'Meiryo UI', Meiryo, sans-serif">メイリオ</option>
+            <option value="'M PLUS Rounded 1c', sans-serif">丸ゴシ</option>
+            <option value="'Kosugi Maru', sans-serif">小杉丸</option>
+            <option value="'Sawarabi Mincho', serif">さわらび明朝</option>
+            <option value="'MS Gothic', monospace">MSゴシック</option>
+        </select>
         <div class="cst-divider"></div>
         <!-- 太字 -->
         <button class="cst-btn" id="cst-bold" title="太字" data-cst-cmd="bold"><b>B</b></button>
