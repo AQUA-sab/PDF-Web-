@@ -269,6 +269,49 @@
             display: flex;
         }
 
+        /* ====== モバイル: 削除・回転ボタンを大きく ====== */
+        @media (max-width: 767px) {
+            .delete-btn-img {
+                top: -26px;
+                right: -26px;
+                width: 56px;
+                height: 56px;
+            }
+
+            .delete-btn-img::after {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+                border-width: 2.5px;
+            }
+
+            .rotate-btn-img {
+                top: -26px;
+                left: -26px;
+                width: 56px;
+                height: 56px;
+            }
+
+            .rotate-btn-img::after {
+                width: 36px;
+                height: 36px;
+                font-size: 20px;
+                border-width: 2.5px;
+            }
+
+            .resize-handle-img {
+                right: -20px;
+                bottom: -20px;
+                width: 56px;
+                height: 56px;
+            }
+
+            .resize-handle-img::after {
+                width: 26px;
+                height: 26px;
+            }
+        }
+
         /* キャプチャ時クリーンアップ */
         .is-capturing .draggable-image-wrapper {
             border-color: transparent !important;
@@ -1238,6 +1281,7 @@
                 initImageEvents();
                 initShapeEvents();   // ★ 図形挿入の初期化
                 initSplitter();      // ★ スプリッターの初期化
+                initPinchZoom();     // ★ ピンチズームの初期化（iPhone）
                 initPreviewClickEdit(); // ★ プレビュークリック編集
                 syncFormInputs();
                 renderItemsForm();
@@ -1346,6 +1390,66 @@
                 splitter.addEventListener('mousedown', onSplitterStart);
                 window.addEventListener('mousemove', onSplitterMove);
                 window.addEventListener('mouseup', onSplitterEnd);
+            }
+
+            // ====== ★ ピンチズーム（iPhone用: プレビューエリアのみ） ======
+            function initPinchZoom() {
+                const pc = document.getElementById('preview-container');
+                if (!pc) return;
+
+                let isPinching = false;
+                let pinchStartDist = 0;
+                let pinchStartScale = 1;
+
+                function getTouchDist(touches) {
+                    const dx = touches[0].clientX - touches[1].clientX;
+                    const dy = touches[0].clientY - touches[1].clientY;
+                    return Math.sqrt(dx * dx + dy * dy);
+                }
+
+                pc.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        isPinching = true;
+                        pinchStartDist = getTouchDist(e.touches);
+                        pinchStartScale = currentScale;
+                        e.preventDefault(); // ページ全体ズームを防止
+                    }
+                }, { passive: false });
+
+                pc.addEventListener('touchmove', (e) => {
+                    if (!isPinching || e.touches.length !== 2) return;
+                    e.preventDefault(); // スクロールとページズームを防止
+
+                    const dist = getTouchDist(e.touches);
+                    if (pinchStartDist === 0) return;
+
+                    const ratio = dist / pinchStartDist;
+                    const newScale = Math.max(0.3, Math.min(pinchStartScale * ratio, 2.0));
+
+                    // 中間2本指の中心点を基準にスクロール位置を調整
+                    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                    const pcRect = pc.getBoundingClientRect();
+                    const relX = (midX - pcRect.left + pc.scrollLeft) / (currentPageSize.w * currentScale);
+                    const relY = (midY - pcRect.top + pc.scrollTop) / (currentPageSize.h * currentScale);
+
+                    currentScale = newScale;
+                    updateZoomUI();
+
+                    // スケール変更後にスクロール位置を中心に合わせる
+                    pc.scrollLeft = relX * currentPageSize.w * currentScale - (midX - pcRect.left);
+                    pc.scrollTop = relY * currentPageSize.h * currentScale - (midY - pcRect.top);
+                }, { passive: false });
+
+                pc.addEventListener('touchend', (e) => {
+                    if (e.touches.length < 2) {
+                        isPinching = false;
+                    }
+                }, { passive: true });
+
+                pc.addEventListener('touchcancel', () => {
+                    isPinching = false;
+                }, { passive: true });
             }
 
             // ====== 画像のドラッグ＆リサイズ制御（マウス + タッチ対応） ======
@@ -1832,10 +1936,14 @@
                     const delBtn = document.createElement('div');
                     delBtn.className = 'shape-delete-btn';
                     delBtn.innerHTML = '✕';
-                    delBtn.style.cssText = 'position:absolute;top:-10px;right:-10px;width:20px;height:20px;border-radius:50%;' +
-                        'background:#ef4444;color:white;border:2px solid white;cursor:pointer;font-size:11px;font-weight:bold;' +
+                    const isMobile = window.innerWidth < 768;
+                    const dBtnSize = isMobile ? '36px' : '20px';
+                    const dBtnOffset = isMobile ? '-16px' : '-10px';
+                    const dBtnFontSize = isMobile ? '15px' : '11px';
+                    delBtn.style.cssText = `position:absolute;top:${dBtnOffset};right:${dBtnOffset};width:${dBtnSize};height:${dBtnSize};border-radius:50%;` +
+                        `background:#ef4444;color:white;border:2.5px solid white;cursor:pointer;font-size:${dBtnFontSize};font-weight:bold;` +
                         'display:' + (sd.id === selectedShapeId ? 'flex' : 'none') + ';align-items:center;justify-content:center;' +
-                        'box-shadow:0 2px 4px rgba(0,0,0,0.25);z-index:56;touch-action:manipulation;';
+                        'box-shadow:0 2px 6px rgba(0,0,0,0.3);z-index:56;touch-action:manipulation;';
                     function doShapeDelete(e) {
                         e.stopPropagation();
                         if (e.cancelable) e.preventDefault();
@@ -1849,8 +1957,10 @@
 
                     // リサイズハンドル
                     const resizeH = document.createElement('div');
-                    resizeH.style.cssText = 'position:absolute;bottom:-6px;right:-6px;width:14px;height:14px;' +
-                        'background:#1A73E8;border:2px solid white;border-radius:50%;cursor:se-resize;z-index:55;' +
+                    const rHandleSize = isMobile ? '22px' : '14px';
+                    const rHandleOffset = isMobile ? '-8px' : '-6px';
+                    resizeH.style.cssText = `position:absolute;bottom:${rHandleOffset};right:${rHandleOffset};width:${rHandleSize};height:${rHandleSize};` +
+                        `background:#1A73E8;border:2px solid white;border-radius:50%;cursor:se-resize;z-index:55;` +
                         'display:' + (sd.id === selectedShapeId ? 'block' : 'none') + ';touch-action:none;';
                     function onShapeResizeStart(e) {
                         e.stopPropagation();
