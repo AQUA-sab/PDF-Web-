@@ -10,9 +10,13 @@
     <!-- PWA・ホーム画面アイコン設定 -->
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" type="image/png" href="icon.png">
+    <link rel="shortcut icon" type="image/png" href="icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="資料作成アプリ">
+    <!-- Windows用アイコン設定 -->
+    <meta name="msapplication-TileImage" content="icon.png">
+    <meta name="msapplication-TileColor" content="#1A73E8">
 
     <link rel="stylesheet" crossorigin="anonymous"
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Serif+JP:wght@300;400;700;900&family=M+PLUS+Rounded+1c:wght@400;700;900&family=Kosugi+Maru&family=Sawarabi+Mincho&display=swap">
@@ -1638,6 +1642,49 @@
                 </section>
             </div>
         </aside>
+    </div>
+
+    <!-- ★ 文字単位スタイルツールバー（テキスト選択時に表示） -->
+    <div id="char-style-toolbar">
+        <!-- プリセットカラー -->
+        <div class="cst-color-dot" title="黒" style="background:#1e293b;" data-cst-color="#1e293b"></div>
+        <div class="cst-color-dot" title="赤" style="background:#ef4444;" data-cst-color="#ef4444"></div>
+        <div class="cst-color-dot" title="青" style="background:#1A73E8;" data-cst-color="#1A73E8"></div>
+        <div class="cst-color-dot" title="緑" style="background:#16a34a;" data-cst-color="#16a34a"></div>
+        <div class="cst-color-dot" title="オレンジ" style="background:#ea580c;" data-cst-color="#ea580c"></div>
+        <div class="cst-color-dot" title="紫" style="background:#7c3aed;" data-cst-color="#7c3aed"></div>
+        <!-- カラーピッカートリガー -->
+        <div class="cst-color-dot" title="カスタム色" id="cst-custom-color-btn"
+            style="background: conic-gradient(red,yellow,lime,cyan,blue,magenta,red); border-color:rgba(255,255,255,0.6);">
+        </div>
+        <input type="color" id="cst-color-picker" value="#ff0000">
+        <div class="cst-divider"></div>
+        <!-- サイズ縮小/拡大 -->
+        <button class="cst-btn" id="cst-size-down" title="文字を小さく" style="font-size:10px;">A-</button>
+        <button class="cst-btn" id="cst-size-up" title="文字を大きく" style="font-size:14px;">A+</button>
+        <div class="cst-divider"></div>
+        <!-- 書体変更 -->
+        <select id="cst-font" title="書体"
+            style="background:#334155;color:white;border:none;border-radius:5px;padding:2px 4px;font-size:11px!important;max-width:80px;cursor:pointer;">
+            <option value="">Aa書体</option>
+            <option value="'Noto Sans JP', sans-serif">Noto Sans</option>
+            <option value="'Noto Serif JP', serif">Noto Serif</option>
+            <option value="'Meiryo UI', Meiryo, sans-serif">メイリオ</option>
+            <option value="'M PLUS Rounded 1c', sans-serif">丸ゴシ</option>
+            <option value="'Kosugi Maru', sans-serif">小杉丸</option>
+            <option value="'Sawarabi Mincho', serif">さわらび明朝</option>
+            <option value="'MS Gothic', monospace">MSゴシック</option>
+        </select>
+        <div class="cst-divider"></div>
+        <!-- 太字 -->
+        <button class="cst-btn" id="cst-bold" title="太字" data-cst-cmd="bold"><b>B</b></button>
+        <!-- 斜体 -->
+        <button class="cst-btn" id="cst-italic" title="斜体" data-cst-cmd="italic"><i>I</i></button>
+        <!-- 下線 -->
+        <button class="cst-btn" id="cst-underline" title="下線" data-cst-cmd="underline"><u>U</u></button>
+        <div class="cst-divider"></div>
+        <!-- リセット -->
+        <button class="cst-btn" id="cst-reset" title="スタイルをリセット(選択範囲)">✕リセット</button>
     </div>
 
     <script id="main-script">
@@ -4355,48 +4402,7 @@
         })();
     </script>
 
-    <!-- ★ 文字単位スタイルツールバー（テキスト選択時に表示） -->
-    <div id="char-style-toolbar">
-        <!-- プリセットカラー -->
-        <div class="cst-color-dot" title="黒" style="background:#1e293b;" data-cst-color="#1e293b"></div>
-        <div class="cst-color-dot" title="赤" style="background:#ef4444;" data-cst-color="#ef4444"></div>
-        <div class="cst-color-dot" title="青" style="background:#1A73E8;" data-cst-color="#1A73E8"></div>
-        <div class="cst-color-dot" title="緑" style="background:#16a34a;" data-cst-color="#16a34a"></div>
-        <div class="cst-color-dot" title="オレンジ" style="background:#ea580c;" data-cst-color="#ea580c"></div>
-        <div class="cst-color-dot" title="紫" style="background:#7c3aed;" data-cst-color="#7c3aed"></div>
-        <!-- カラーピッカートリガー -->
-        <div class="cst-color-dot" title="カスタム色" id="cst-custom-color-btn"
-            style="background: conic-gradient(red,yellow,lime,cyan,blue,magenta,red); border-color:rgba(255,255,255,0.6);">
-        </div>
-        <input type="color" id="cst-color-picker" value="#ff0000">
-        <div class="cst-divider"></div>
-        <!-- サイズ縮小/拡大 -->
-        <button class="cst-btn" id="cst-size-down" title="文字を小さく" style="font-size:10px;">A-</button>
-        <button class="cst-btn" id="cst-size-up" title="文字を大きく" style="font-size:14px;">A+</button>
-        <div class="cst-divider"></div>
-        <!-- 書体変更 -->
-        <select id="cst-font" title="書体"
-            style="background:#334155;color:white;border:none;border-radius:5px;padding:2px 4px;font-size:11px!important;max-width:80px;cursor:pointer;">
-            <option value="">Aa書体</option>
-            <option value="'Noto Sans JP', sans-serif">Noto Sans</option>
-            <option value="'Noto Serif JP', serif">Noto Serif</option>
-            <option value="'Meiryo UI', Meiryo, sans-serif">メイリオ</option>
-            <option value="'M PLUS Rounded 1c', sans-serif">丸ゴシ</option>
-            <option value="'Kosugi Maru', sans-serif">小杉丸</option>
-            <option value="'Sawarabi Mincho', serif">さわらび明朝</option>
-            <option value="'MS Gothic', monospace">MSゴシック</option>
-        </select>
-        <div class="cst-divider"></div>
-        <!-- 太字 -->
-        <button class="cst-btn" id="cst-bold" title="太字" data-cst-cmd="bold"><b>B</b></button>
-        <!-- 斜体 -->
-        <button class="cst-btn" id="cst-italic" title="斜体" data-cst-cmd="italic"><i>I</i></button>
-        <!-- 下線 -->
-        <button class="cst-btn" id="cst-underline" title="下線" data-cst-cmd="underline"><u>U</u></button>
-        <div class="cst-divider"></div>
-        <!-- リセット -->
-        <button class="cst-btn" id="cst-reset" title="スタイルをリセット(選択範囲)">✕リセット</button>
-    </div>
+
 
 </body>
 
