@@ -8,8 +8,10 @@
     <title>資料作成アプリ</title>
 
     <!-- PWA・ホーム画面アイコン設定 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1A73E8">
     <link rel="apple-touch-icon" href="icon.png">
-    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
     <link rel="shortcut icon" type="image/png" href="icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -4411,7 +4413,14 @@
         })();
     </script>
 
-
+    <!-- Service Worker登録（PWAインストール用） -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => { });
+            });
+        }
+    </script>
 
 </body>
 
