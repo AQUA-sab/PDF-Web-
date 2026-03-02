@@ -3030,11 +3030,16 @@
                         if (cid && cid.startsWith('heading_')) {
                             const idx = parseInt(cid.split('_')[1]);
                             if (state.items[idx]) {
-                                // 見出しテキスト本体（番号circleを除く）を保存
-                                const clone = el.cloneNode(true);
-                                const cSpan = clone.querySelector('span[contenteditable="false"]');
-                                if (cSpan) cSpan.remove();
-                                state.items[idx].headingHTML = clone.innerHTML.trim();
+                                // 見出しテキスト本体（ラッパーspan内）を保存
+                                const headWrap = el.querySelector('.heading-text-wrap');
+                                if (headWrap) {
+                                    state.items[idx].headingHTML = headWrap.innerHTML;
+                                } else {
+                                    const clone = el.cloneNode(true);
+                                    const cSpan = clone.querySelector('span[contenteditable="false"]');
+                                    if (cSpan) cSpan.remove();
+                                    state.items[idx].headingHTML = clone.innerHTML.trim();
+                                }
                             }
                         } else if (cid && cid.startsWith('content_')) {
                             const idx = parseInt(cid.split('_')[1]);
@@ -3602,8 +3607,7 @@
                         block.innerHTML = `
                             <div class="density-pad">
                                 <h2 class="border-l-[3px] pl-3 mb-3 flex items-center gap-2" style="${headingInlineStyle}" data-clickable-style="heading_${i}" contenteditable="true" spellcheck="false" data-placeholder="見出し">
-                                    <span class="text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0" style="background:${hs.color};" contenteditable="false">${i + 1}</span>
-                                    ${headingContent}
+                                    <span class="text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0" style="background:${hs.color};" contenteditable="false">${i + 1}</span><span class="heading-text-wrap" style="flex:1;min-width:0;">${headingContent}</span>
                                 </h2>
                                 ${(contentContent || item.content) ? `<div class="leading-[1.8] whitespace-pre-wrap pl-5" style="${contentInlineStyle}" data-clickable-style="content_${i}" contenteditable="true" spellcheck="false">${contentContent}</div>` : ''}
                                 ${memoHtml}
@@ -3615,10 +3619,15 @@
                         const divEl = block.querySelector(`[data-clickable-style="content_${i}"]`);
                         if (h2El) {
                             h2El.addEventListener('input', () => {
-                                const clone = h2El.cloneNode(true);
-                                const cSpan = clone.querySelector('span[contenteditable="false"]');
-                                if (cSpan) cSpan.remove();
-                                state.items[i].headingHTML = clone.innerHTML.trim();
+                                const headWrap = h2El.querySelector('.heading-text-wrap');
+                                if (headWrap) {
+                                    state.items[i].headingHTML = headWrap.innerHTML;
+                                } else {
+                                    const clone = h2El.cloneNode(true);
+                                    const cSpan = clone.querySelector('span[contenteditable="false"]');
+                                    if (cSpan) cSpan.remove();
+                                    state.items[i].headingHTML = clone.innerHTML.trim();
+                                }
                                 // プレーンテキストも更新（フォーム入力欄との同期用）
                                 state.items[i].heading = h2El.innerText.replace(/^\d+\s*/, '').trim();
                             });
